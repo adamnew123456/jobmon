@@ -1,0 +1,30 @@
+[
+{
+    "queryable-task": 
+    {
+        "command": "test-jobs/sleep-for-10-seconds",
+    }
+},
+{
+    "log-stdout":
+    {
+        "command": "test-jobs/say-yes-100-times-to-stdout",
+        "stdout": "/tmp/yes-100-stdout",
+    }
+},
+{
+    "log-stderr":
+    {
+        "command": "test-jobs/say-yes-100-times-to-stderr",
+        "stderr": "/tmp/yes-100-stderr",
+    }
+},
+{
+    "env-values":
+    {
+        "command": "test-jobs/print-env",
+        "stdout": "/tmp/env-test",
+        "env":
+        {"A": "a", "B": "b"}
+    }
+]
