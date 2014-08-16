@@ -47,6 +47,31 @@ class JobTester(unittest.TestCase):
         # Ensure that the process isn't reported as running when we ask
         self.assertFalse(self.job_commands.is_running('queryable-task'))
 
+    def test_termination(self):
+        # Reuse 'queryable-task' since it gives us a change to kill it.
+        self.job_commands.start_job('queryable-task')
+
+        # Wait for the event which fires when the job starts.
+        self.job_events.next_event()
+        start_time = time.time()
+
+        # Now, ensure the job is running, and then kill it.
+        self.assertTrue(self.job_commands.is_running('queryable-task'))
+        self.assertTrue(self.job_commands.stop_job('queryable-task'))
+
+        # Wait for the event which fires when the job ends.
+        self.job_events.next_event()
+        end_time = time.time()
+
+        # Although it is possible it would take more than 5s for the job to end,
+        # this is probably a good heuristic since it is less than the 10s it
+        # takes the job to run, but more than it would take to kill a process on
+        # a reasonable system.
+        self.assertLess(end_time - start_time, 5)
+
+        # Ensure that the job is dead.
+        self.assertFalse(self.job_commands.is_running('queryable-task'))
+
     def test_log_stdout(self):
         # Run the 'log-stdout' job, and wait for it to run to completion.
         self.job_commands.start_job('log-stdout')
