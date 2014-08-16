@@ -20,32 +20,39 @@ class JobTester(unittest.TestCase):
     def tearDown(self):
         # Destroy the connections so that they get closed cleanly
         self.job_events.destroy()
-        self.job_command.destroy()
+        self.self.job_commands.destroy()
 
     def test_query(self):
         # First, start off by testing out the 'queryable-task' job. This task is meant
         # to sit for long enough that we can query it after a little while, while it is
         # still alive, and expect to get a living result. Note that this job runs
         # for ten seconds, so we have only that long to query it.
-        job_command.start_job('queryable-task')
+        self.job_commands.start_job('queryable-task')
+
+        # Wait for the event which fires when the job starts
+        event = self.job_events.next_event()
+        self.assertEqual(event.event_type, protocol.EVENT_START)
+        self.assertEqual(event.job, 'queryable-task')
 
         # Now, wait repeatedly and ensure the job is still running after each wait.
         for x in range(5):
             time.sleep(1)
-            self.assertTrue(job_command.is_running('queryable-task'))
+            self.assertTrue(self.job_commands.is_running('queryable-task'))
 
         # Finally, wait for the next event. Ensure that it is our process dying.
-        event = job_events.next_event()
+        event = self.job_events.next_event()
         self.assertEqual(event.event_type, protocol.EVENT_TERMINATE)
         self.assertEqual(event.job, 'queryable-task')
 
         # Ensure that the process isn't reported as running when we ask
-        self.assertFalse(job_command.is_running('queryable-task'))
+        self.assertFalse(self.job_commands.is_running('queryable-task'))
 
     def test_log_stdout(self):
         # Run the 'log-stdout' job, and wait for it to run to completion.
-        job_command.start_job('log-stdout')
-        job_events.next_event()
+        self.job_commands.start_job('log-stdout')
+        self.job_events.next_event()
+
+        self.job_events.next_event()
 
         # Make sure that the log contains 100 lines of 'yes'
         with open('/tmp/yes-100-stdout') as stdout_log:
@@ -60,8 +67,10 @@ class JobTester(unittest.TestCase):
 
     def test_log_stderr(self):
         # Run the 'log-stderr' job, and wait for it to run to completion.
-        job_command.start_job('log-stderr')
-        job_events.next_event()
+        self.job_commands.start_job('log-stderr')
+        self.job_events.next_event()
+
+        self.job_events.next_event()
 
         # Make sure that the log contains 100 lines of 'yes'
         with open('/tmp/yes-100-stderr') as stderr_log:
@@ -76,8 +85,8 @@ class JobTester(unittest.TestCase):
 
     def test_env_values(self):
         # Run the 'env-values' job and wait for it to run to completion
-        job_command.start_job('env-values')
-        job_events.next_event()
+        self.job_commands.start_job('env-values')
+        self.job_events.next_event()
 
         # Make sure that the log contains the values 'a' and 'b', since those
         # were the ones passed in via the environment, and nothing else.
