@@ -80,6 +80,9 @@ class CommandPipe:
     - :meth:`is_running` queries a job to see if it is currently running or not.
     - :meth:`terminate` shuts down the supervisor and all currently running
       tasks.
+    - :meth:`get_jobs` gets a :class:`dict` of known jobs, with the key being
+      the job name, and the value being ``True`` if the job is running or
+      ``False`` if it is not.
 
     Note that if any of these methods are called with job names that don't
     exist, then a :class:`NameError` will be raised.
@@ -145,6 +148,17 @@ class CommandPipe:
                     protocol.reason_to_str(result.reason)))
         else:
             return result.is_running
+
+    def get_jobs(self):
+        """
+        Gets the status of every job known to the supervisor.
+        :return: A :class:`dict` where each key is a job name and each value \
+        is ``True`` if the job is running or ``False`` otherwise.
+        """
+        msg = protocol.Command(None, protocol.CMD_JOB_LIST)
+        protocol.send_message(msg, self.sock)
+        result = protocol.recv_message(self.sock)
+        return result.all_jobs
 
     def destroy(self):
         """

@@ -72,6 +72,25 @@ class JobTester(unittest.TestCase):
         # Ensure that the job is dead.
         self.assertFalse(self.job_commands.is_running('queryable-task'))
 
+    def test_job_list(self):
+        # First, start the long job so that we can differentiate between
+        # stopped and running jobs.
+        self.job_commands.start_jo('queryable-task')
+        self.job_events.next_event()
+
+        # Query the list of jobs
+        job_list = self.job_commands.get_jobs()
+        self.assertEqual(job_list,
+                {'queryable-task': True, 'log-stdout': False, 
+                 'log-stderr': False, 'env-values': False})
+
+        # Wait for the job to die and run the query again
+        self.job_events.next_event()
+        job_list = self.job_commands.get_jobs()
+        self.assertEqual(job_list,
+                {'queryable-task': False, 'log-stdout': False, 
+                 'log-stderr': False, 'env-values': False})
+
     def test_log_stdout(self):
         # Run the 'log-stdout' job, and wait for it to run to completion.
         self.job_commands.start_job('log-stdout')

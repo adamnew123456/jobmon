@@ -13,7 +13,8 @@ EVENT_STARTJOB, EVENT_STOPJOB = 0, 1
 CMD_START, CMD_STOP, CMD_STATUS, CMD_QUIT = 2, 3, 4, 5
 
 # Indicates the types of messages which can be sent via sockets
-MSG_EVENT, MSG_COMMAND, MSG_SUCCESS, MSG_FAILURE, MSG_STATUS = range(5)
+(MSG_EVENT, MSG_COMMAND, MSG_SUCCESS, MSG_FAILURE, MSG_STATUS, MSG_JOB_LIST 
+) = range(6)
 
 # Indicates errors which can be passed along in a FailureResponse
 (ERR_NO_SUCH_JOB, # When a job name is not registered to a job
@@ -148,12 +149,35 @@ class StatusResponse(namedtuple('StatusResponse', ['job_name', 'is_running'])):
             raise ValueError
         return StatusResponse(dct['job'], dct['is_running'])
 
+class JobListResponse(namedtuple('JobListResponse', ['all_jobs'])):
+    def serialize(self):
+        """
+        :return: A :class:`dict` representation of this event.
+        """
+        return {
+            'type': MSG_JOB_LIST,
+            'all_jobs': self.all_jobs
+        }
+
+    @staticmethod
+    def unserialize(self, dct):
+        """
+        Transforms the given dict into an instance of this class.
+
+        :param dict dct: A serialized message.
+        :return: The corresponding event.
+        """
+        if dct['type'] != MSG_JOB_LIST:
+            raise ValueError
+        return JobListResponse(dct['all_jobs'])
+
 RECV_HANDLERS = {
     MSG_EVENT: Event,
     MSG_COMMAND: Command,
     MSG_SUCCESS: SuccessResponse,
     MSG_FAILURE: FailureResponse,
     MSG_STATUS: StatusResponse,
+    MSG_JOB_LIST: JobListResponse,
 }
 
 def send_message(message, sock):
