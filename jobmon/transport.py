@@ -160,6 +160,13 @@ class CommandPipe:
         result = protocol.recv_message(self.sock)
         return result.all_jobs
 
+    def terminate(self):
+        """
+        Terminates the supervisor.
+        """
+        msg = protocol.Command(None, protocol.CMD_STOP)
+        protocol.send_message(msg, self.sock)
+
     def destroy(self):
         """
         Closes the socket owned by this command pipe.
