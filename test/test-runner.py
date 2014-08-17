@@ -72,6 +72,16 @@ class JobTester(unittest.TestCase):
         # Ensure that the job is dead.
         self.assertFalse(self.job_commands.is_running('queryable-task'))
 
+    def test_unknown_job(self):
+        with self.assertRaises(NameError):
+            self.job_command.start_job('not-a-job')
+
+        with self.assertRaises(NameError):
+            self.job_command.stop_job('not-a-job')
+
+        with self.assertRaises(NameError):
+            self.job_command.is_running('not-a-job')
+
     def test_job_list(self):
         # First, start the long job so that we can differentiate between
         # stopped and running jobs.
@@ -90,6 +100,23 @@ class JobTester(unittest.TestCase):
         self.assertEqual(job_list,
                 {'queryable-task': False, 'log-stdout': False, 
                  'log-stderr': False, 'env-values': False})
+
+    def test_job_enter_existing_state(self):
+        # Start a long running job, so that way we have time to try to start
+        # it while it is running.
+        self.job_commands.start_job('queryable-task')
+        self.job_events.next_event()
+
+        # Ensure that starting an already running job fails
+        with self.assertRaises(transport.JobError):
+            self.job_commands.start_job('queryable-task')
+
+        # Finally, wait for the job to end
+        self.job_events.next_event()
+
+        # Ensure that stopping an already stopped job fails
+        with self.assertRaises(transport.JobError):
+            self.job_commands.stop_job('queryable-task')
 
     def test_log_stdout(self):
         # Run the 'log-stdout' job, and wait for it to run to completion.
