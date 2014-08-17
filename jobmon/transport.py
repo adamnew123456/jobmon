@@ -133,7 +133,7 @@ class CommandPipe:
         :param str job_name: The name of the job to query.
         :return: ``True`` if the job is running, ``False`` otherwise.
         """
-        msg = protocol.Command(job_name, protocol.CMD_STOP)
+        msg = protocol.Command(job_name, protocol.CMD_STATUS)
         protocol.send_message(msg, self.sock)
         result = protocol.recv_message(self.sock)
 

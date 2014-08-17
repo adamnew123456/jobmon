@@ -6,16 +6,11 @@ import os
 import socket
 import struct
 
-from jobmon import utils
-
 # Constants for denoting event codes
 EVENT_STARTJOB, EVENT_STOPJOB = 0, 1
 
 # Constants which denote command codes
-CMD_START, CMD_STOP, CMD_STATUS = 2, 3, 4
-
-# Constants which denote response codes
-RSP_SUCCESS, RSP_FAILURE, RSP_STATUS = 5, 6, 7
+CMD_START, CMD_STOP, CMD_STATUS, CMD_QUIT = 2, 3, 4, 5
 
 # Indicates the types of messages which can be sent via sockets
 MSG_EVENT, MSG_COMMAND, MSG_SUCCESS, MSG_FAILURE, MSG_STATUS = range(5)

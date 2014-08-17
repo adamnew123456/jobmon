@@ -7,15 +7,15 @@ import sys
 import time
 import unittest
 
-from jobmon import launcher, protocol
+from jobmon import launcher, protocol, transport
 
 class JobTester(unittest.TestCase):
     def setUp(self):
         # Connect to the supervisor. This comes in two parts - on one hand, the
         # supervisor has an event-dispatching system which will tell us when jobs have
         # ended, and a command pipe which will allow us to query things.
-        self.job_events = protocol.EventStream()
-        self.job_commands = protocol.CommandPipe()
+        self.job_events = transport.EventStream()
+        self.job_commands = transport.CommandPipe()
 
     def tearDown(self):
         # Destroy the connections so that they get closed cleanly
@@ -31,7 +31,7 @@ class JobTester(unittest.TestCase):
 
         # Wait for the event which fires when the job starts
         event = self.job_events.next_event()
-        self.assertEqual(event.event_type, protocol.EVENT_START)
+        self.assertEqual(event.event_code, protocol.EVENT_START)
         self.assertEqual(event.job, 'queryable-task')
 
         # Now, wait repeatedly and ensure the job is still running after each wait.
@@ -41,7 +41,7 @@ class JobTester(unittest.TestCase):
 
         # Finally, wait for the next event. Ensure that it is our process dying.
         event = self.job_events.next_event()
-        self.assertEqual(event.event_type, protocol.EVENT_TERMINATE)
+        self.assertEqual(event.event_code, protocol.EVENT_TERMINATE)
         self.assertEqual(event.job, 'queryable-task')
 
         # Ensure that the process isn't reported as running when we ask
