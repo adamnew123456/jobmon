@@ -58,6 +58,12 @@ class EventStream:
         """
         return protocol.recv_message(self.sock)
 
+    def destroy(self):
+        """
+        Closes the socket owned by this event stream.
+        """
+        self.sock.close()
+
 class CommandPipe:
     """
     A bidirectional stream of requests and responses.
@@ -72,6 +78,8 @@ class CommandPipe:
     - :meth:`stop_job` forcibly terminates a job. If the given job is not
       currently running, then a :class:`JobError` is raised.
     - :meth:`is_running` queries a job to see if it is currently running or not.
+    - :meth:`terminate` shuts down the supervisor and all currently running
+      tasks.
 
     Note that if any of these methods are called with job names that don't
     exist, then a :class:`NameError` will be raised.
@@ -137,3 +145,9 @@ class CommandPipe:
                     protocol.reason_to_str(result.reason)))
         else:
             return result.is_running
+
+    def destroy(self):
+        """
+        Closes the socket owned by this command pipe.
+        """
+        self.sock.close()

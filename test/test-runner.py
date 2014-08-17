@@ -128,6 +128,6 @@ if __name__ == '__main__':
     launcher.run_server(config=jobfile)
     unittest.main()
 
-    job_commands = protocol.CommandPipe()
-    job_commands.quit_server()
+    job_commands = transport.CommandPipe()
+    job_commands.terminate()
     job_commands.destroy()
