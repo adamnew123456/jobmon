@@ -96,7 +96,7 @@ class SuccessResponse(namedtuple('SuccessResponse', ['job_name'])):
         }
 
     @staticmethod
-    def unserialize(self):
+    def unserialize(dct):
         """
         Transforms the given dict into an instance of this class.
 
@@ -119,7 +119,7 @@ class FailureResponse(namedtuple('FailureResponse', ['job_name', 'reason'])):
         }
 
     @staticmethod
-    def unserialize(self):
+    def unserialize(dct):
         """
         Transforms the given dict into an instance of this class.
 
@@ -142,7 +142,7 @@ class StatusResponse(namedtuple('StatusResponse', ['job_name', 'is_running'])):
         }
 
     @staticmethod
-    def unserialize(self):
+    def unserialize(dct):
         """
         Transforms the given dict into an instance of this class.
 
