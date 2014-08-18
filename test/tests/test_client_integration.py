@@ -9,18 +9,23 @@ import unittest
 
 from jobmon import launcher, protocol, transport
 
-class JobTester(unittest.TestCase):
+class ClientItegrationTest(unittest.TestCase):
     def setUp(self):
+
         # Connect to the supervisor. This comes in two parts - on one hand, the
         # supervisor has an event-dispatching system which will tell us when jobs have
         # ended, and a command pipe which will allow us to query things.
+        jobfile = os.path.join(os.path.dirname(__file__), 'jobfile.json')
+        launcher.run_server(config=jobfile)
+
         self.job_events = transport.EventStream()
         self.job_commands = transport.CommandPipe()
 
     def tearDown(self):
         # Destroy the connections so that they get closed cleanly
         self.job_events.destroy()
-        self.self.job_commands.destroy()
+        self.job_commands.terminate()
+        self.job_commands.destroy()
 
     def test_query(self):
         # First, start off by testing out the 'queryable-task' job. This task is meant
@@ -168,12 +173,3 @@ class JobTester(unittest.TestCase):
 
         # Clean up the log file
         os.remove('/tmp/env-test')
-
-if __name__ == '__main__':
-    jobfile = os.path.join(os.path.dirname(__file__), 'jobfile.json')
-    launcher.run_server(config=jobfile)
-    unittest.main()
-
-    job_commands = transport.CommandPipe()
-    job_commands.terminate()
-    job_commands.destroy()
