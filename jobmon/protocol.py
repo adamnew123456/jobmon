@@ -56,7 +56,7 @@ class Event(namedtuple('Event', ['job_name', 'event_code'])):
         """
         if dct['type'] != MSG_EVENT:
             raise ValueError
-        return Event(dct['job_name'], int(dct['event_code']))
+        return Event(dct['job'], int(dct['event']))
 
 class Command(namedtuple('Command', ['job_name', 'command_code'])):
     def serialize(self):
@@ -79,7 +79,7 @@ class Command(namedtuple('Command', ['job_name', 'command_code'])):
         """
         if dct['type'] != MSG_COMMAND:
             raise ValueError
-        return Command(dct['job_name'], int(dct['command_code']))
+        return Command(dct['job'], int(dct['command']))
 
 class SuccessResponse(namedtuple('SuccessResponse', ['job_name'])): 
     def serialize(self):
@@ -191,7 +191,7 @@ def send_message(message, sock):
 
     # Pack the length and the bytes-encoded body together, which need to be
     # sent together.
-    unsent = struct.pack('>I', json_bytes)
+    unsent = struct.pack('>I', len(json_bytes))
     unsent += json_bytes
 
     while unsent:
