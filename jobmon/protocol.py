@@ -10,7 +10,7 @@ import struct
 EVENT_STARTJOB, EVENT_STOPJOB = 0, 1
 
 # Constants which denote command codes
-CMD_START, CMD_STOP, CMD_STATUS, CMD_QUIT = 2, 3, 4, 5
+CMD_START, CMD_STOP, CMD_STATUS, CMD_JOB_LIST, CMD_QUIT = 2, 3, 4, 5, 6
 
 # Indicates the types of messages which can be sent via sockets
 (MSG_EVENT, MSG_COMMAND, MSG_SUCCESS, MSG_FAILURE, MSG_STATUS, MSG_JOB_LIST 
@@ -160,7 +160,7 @@ class JobListResponse(namedtuple('JobListResponse', ['all_jobs'])):
         }
 
     @staticmethod
-    def unserialize(self, dct):
+    def unserialize(dct):
         """
         Transforms the given dict into an instance of this class.
 

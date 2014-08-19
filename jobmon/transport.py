@@ -158,7 +158,11 @@ class CommandPipe:
         msg = protocol.Command(None, protocol.CMD_JOB_LIST)
         protocol.send_message(msg, self.sock)
         result = protocol.recv_message(self.sock)
-        return result.all_jobs
+        if isinstance(result, protocol.FailureResponse):
+            raise JobError('Unknown error: reason "{}"'.format(
+                protocol.reason_to_str(result.reason)))
+        else:
+            return result.all_jobs
 
     def terminate(self):
         """
