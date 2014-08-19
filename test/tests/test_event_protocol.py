@@ -10,7 +10,7 @@ class EventProtocolTester(unittest.TestCase):
     def setUp(self):
         # Create a fake socket and a fake event stream. We keep the socket
         # since this test needs to synthesize events
-        self.fake_socket = fakes.FakeSocket()
+        self.fake_socket = fakes.FakeOneWaySocket()
         self.event_stream = fakes.FakeEventStream(self.fake_socket)
 
     def tearDown(self):

@@ -1,10 +1,11 @@
 """
 'Faked' (or mocked) objects which are useful for testing.
 """
+import os
 
 from jobmon import transport
 
-class FakeSocket:
+class FakeOneWaySocket:
     """
     A mock socket which contains the basic interface necessary to support the
     implementation of the protocol used by jobmon.
@@ -32,6 +33,7 @@ class FakeSocket:
 
     def close(self):
         self.connected = False
+        self.buffer = b''
 
     def send(self, data):
         if not self.connected:
@@ -50,6 +52,37 @@ class FakeSocket:
         self.buffer = tail
         return head
 
+class FakeTwoWaySocket:
+    """
+    A mock socket which goes two-ways, like :class:`FakeOneWaySocket`.
+    """
+    class FakeTwoWaySocketHandler:
+        def __init__(self, reader, writer):
+            self.reader = reader
+            self.writer = writer
+
+        def close(self):
+            self.reader.close()
+            self.writer.close()
+
+        def send(self, data):
+            return self.writer.send(data)
+
+        def recv(self, count):
+            return self.reader.recv(count)
+
+    def __init__(self):
+        self.server = FakeOneWaySocket()
+        self.client = FakeOneWaySocket()
+
+    def accept(self):
+        self.server.connect(None)
+        return self.FakeTwoWaySocketHandler(self.server, self.client)
+
+    def connect(self, location):
+        self.client.connect(None)
+        return self.FakeTwoWaySocketHandler(self.client, self.server)
+
 class FakeEventStream(transport.EventStream):
     """
     An event stream which is written to use a :class:`FakeSocket` instead of a
@@ -59,4 +92,12 @@ class FakeEventStream(transport.EventStream):
     def __init__(self, sock):
         self.sock = sock
         self.sock.connect(None)
+        self.connected = False
 
+class FakeCommandPipe(transport.CommandPipe):
+    """
+    A command pipe which is written to use a :class:`FakeSocket` instead of a
+    typical socket.
+    """
+    def __init__(self, sock):
+        self.sock = sock
