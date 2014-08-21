@@ -1,5 +1,5 @@
 """
-JobMon Protocol Implementation
+JobMon Protocol - High Level
 ==============================
 
 Implements the high-level protocol which the supervisor and clients use to 

@@ -1,4 +1,19 @@
 """
+JobMon Protocol - Low Level
+===========================
+
+Implements the low-level details of the protocol used between the supervisor
+and clients. The :mod:`jobmon.transport` module implements the higher-level
+abstractions which use this low-level machinery.
+
+In general, this module is separated into two parts:
+
+- **Message definitions** define what kind of objects are sent via sockets.
+  These definitions (such as :class:`Event`) are self-contained, and handle
+  encoding and decoding.
+- The send and receive functions use the message definitions to construct
+  byte strings from message, which are sent over the network, and to decode 
+  incoming byte strings into messages.
 """
 from collections import namedtuple
 import json
