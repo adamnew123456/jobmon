@@ -7,14 +7,17 @@ subprocesses, as well as notifying the owner that the subprocesses have started
 (or stopped) via callbacks. The important class here is :class:`ChildProcess`, 
 which can handle these actions.
 """
+from collections import namedtuple
 import os
 import select
 import signal
+import sys
 import threading
 
 # Constants used on the event queue, to signal that this child process has
 # started/stopped
-PROC_START, PROC_STOP = range(2)
+ProcStart = namedtuple('ProcStart', 'process')
+ProcStop = namedtuple('ProcStop', 'process')
 
 class ChildProcess:
     def __init__(self, event_queue, program, **config):
@@ -43,7 +46,7 @@ class ChildProcess:
         self.stderr = '/dev/null'
         self.env = {}
 
-        for config_name, config_value in config.values():
+        for config_name, config_value in config.items():
             if config_name == 'stdin':
                 self.stdin = config_value
             elif config_name == 'stdout':
@@ -69,7 +72,7 @@ class ChildProcess:
         # on another thread's file descriptors. Since a dead FIFO write end
         # sends out an EOF when the child process dies, we can use select() to
         # wait for that EOF (which is considered a read event).
-        child_pipe, status_pipe = os.pipe()
+        status_pipe, child_pipe = os.pipe()
 
         child_pid = os.fork()
         if child_pid == 0:
@@ -79,30 +82,38 @@ class ChildProcess:
 
             # Redirect the stdio streams
             stdin = open(self.stdin)
-            stdout = open(self.stdout)
-            stderr = open(self.stderr)
-            os.dup2(sys.stdin.fileno(), stdin.fileno())
-            os.dup2(sys.stdout.fileno(), stdout.fileno())
-            os.dup2(sys.stderr.fileno(), stderr.fileno())
+            stdout = open(self.stdout, 'a')
+            stderr = open(self.stderr, 'a')
+            os.dup2(stdin.fileno(), sys.stdin.fileno())
+            os.dup2(stdout.fileno(), sys.stdout.fileno())
+            os.dup2(stderr.fileno(), sys.stderr.fileno())
 
-            # Avoid keeping around a subshell by exec()ing /bin/sh directly.
-            os.execl('/bin/sh', '/bin/sh', '-c', self.command)
+            stdin.close()
+            stdout.close()
+            stderr.close()
+
+            # We can't execl into /bin/sh, since otherwise the pipe we use to
+            # communicate with our parent would send out an EOF too early.
+            os.system(self.program)
+            sys.exit(1)
         else:
             # Close out the child's pipe to avoid any deadlock.
             os.close(child_pipe)
 
             self.child_pid = child_pid
-            self.event_queue.put((PROC_START, self))
+            self.event_queue.put(ProcStart(self))
 
             def wait_for_subprocess():
                 # Even though it seems like the writer dying is an error
                 # condition, it is in fact sending out an EOF which is
                 # considered readable
                 select.select([status_pipe], [], [])
-                self.event_queue.put((PROC_STOP, self))
+                self.event_queue.put(ProcStop(self))
                 self.child_pid = None
 
             waiter_thread = threading.Thread(target=wait_for_subprocess)
+            waiter_thread.daemon = True
+            waiter_thread.start()
 
     def quit(self):
         """
@@ -113,7 +124,7 @@ class ChildProcess:
         this signal or not terminate.
         """
         if self.child_pid is not None:
-            os.kill(self.child_pid, signal.SIG_TERM)
+            os.kill(self.child_pid, signal.SIGTERM)
         else:
             raise ValueError('Child process not running - cannot terminate it')
 
@@ -126,7 +137,7 @@ class ChildProcess:
         will probably not happen.
         """
         if self.child_pid is not None:
-            os.kill(self.child_pid, signal.SIG_KILL)
+            os.kill(self.child_pid, signal.SIGKILL)
         else:
             raise ValueError('Child process not running - cannot kill it')
 
