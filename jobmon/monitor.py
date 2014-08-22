@@ -36,6 +36,7 @@ class ChildProcess:
         - ``stderr`` is the name of the file to hook up the child process's \
         standard error.
         - ``env`` is the environment to pass to the child process.
+        - ``cwd`` sets the working directory of the child process.
         """
         self.event_queue = event_queue
         self.program = program
@@ -45,6 +46,7 @@ class ChildProcess:
         self.stdout = '/dev/null'
         self.stderr = '/dev/null'
         self.env = {}
+        self.working_dir = None
 
         for config_name, config_value in config.items():
             if config_name == 'stdin':
@@ -55,6 +57,8 @@ class ChildProcess:
                 self.stderr = config_value
             elif config_name == 'env':
                 self.env = config_value
+            elif config_name == 'cwd':
+                self.working_dir = config_value
             else:
                 raise NameError('No configuration option "{}"'.format(
                                 config_name))
@@ -66,24 +70,19 @@ class ChildProcess:
         if self.child_pid is not None:
             raise ValueError('Child process already running - cannot start another')
 
-        # Using pipes is an effective method to track a subprocess, which works
-        # from another thread. Since Linux is a little weird about using 
-        # waitpid() from non-main threads, but doesn't care about using select()
-        # on another thread's file descriptors. Since a dead FIFO write end
-        # sends out an EOF when the child process dies, we can use select() to
-        # wait for that EOF (which is considered a read event).
-        status_pipe, child_pipe = os.pipe()
+        # Since we're going to be redirecting stdout/stderr, we need to flush
+        # these streams to prevent the child's logs from getting polluted
+        sys.stdout.flush()
+        sys.stderr.flush()
 
         child_pid = os.fork()
         if child_pid == 0:
-            # Close out the parent's pipe, so that there isn't a deadlock
-            # between the two processes
-            os.close(status_pipe)
-
-            # Redirect the stdio streams
+            # Put the proper file descriptors in to replace the standard
+            # streams
             stdin = open(self.stdin)
             stdout = open(self.stdout, 'a')
             stderr = open(self.stderr, 'a')
+
             os.dup2(stdin.fileno(), sys.stdin.fileno())
             os.dup2(stdout.fileno(), sys.stdout.fileno())
             os.dup2(stderr.fileno(), sys.stderr.fileno())
@@ -92,22 +91,33 @@ class ChildProcess:
             stdout.close()
             stderr.close()
 
-            # We can't execl into /bin/sh, since otherwise the pipe we use to
-            # communicate with our parent would send out an EOF too early.
-            os.system(self.program)
+            # Update the child's environment with whatever variables were
+            # given to us
+            child_env = dict(os.environ)
+            child_env.update(self.env)
+
+            # Change the directory to the preferred working directory for the
+            # child
+            if self.working_dir is not None:
+                os.chdir(self.working_dir)
+
+            # Run the child - to avoid keeping around an extra process, go
+            # ahead and pass the command to a subshell, which will replace
+            # this process
+            os.execvpe('/bin/sh', ['/bin/sh', '-c', self.program], child_env)
+
+            # Just in case we fail, we need to avoid exiting this routine
             sys.exit(1)
         else:
-            # Close out the child's pipe to avoid any deadlock.
-            os.close(child_pipe)
-
             self.child_pid = child_pid
             self.event_queue.put(ProcStart(self))
 
             def wait_for_subprocess():
-                # Even though it seems like the writer dying is an error
-                # condition, it is in fact sending out an EOF which is
-                # considered readable
-                select.select([status_pipe], [], [])
+                # Since waitpid() is synchronous (doing it asynchronously takes
+                # a good deal more work), the waiting is done in a worker thread
+                # whose only job is to wait until the child dies, and then to
+                # notify the parent
+                pid, status = os.waitpid(self.child_pid, 0)
                 self.event_queue.put(ProcStop(self))
                 self.child_pid = None
 
@@ -115,26 +125,9 @@ class ChildProcess:
             waiter_thread.daemon = True
             waiter_thread.start()
 
-    def quit(self):
-        """
-        Asks the subprocess to terminate.
-
-        Unlike :meth:`quit`, this allows the process to perform any cleanup
-        it needs to. On the other hand, some processes can choose to ignore
-        this signal or not terminate.
-        """
-        if self.child_pid is not None:
-            os.kill(self.child_pid, signal.SIGTERM)
-        else:
-            raise ValueError('Child process not running - cannot terminate it')
-
     def kill(self):
         """
-        Kills the subprocess.
-
-        Note that this forces the subprocess to stop, unlike :meth:`quit`
-        which merely asks nicely. This means that certain cleanup actions
-        will probably not happen.
+        Forcibly kills the subprocess.
         """
         if self.child_pid is not None:
             os.kill(self.child_pid, signal.SIGKILL)
