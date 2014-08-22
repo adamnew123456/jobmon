@@ -28,6 +28,10 @@ class ChildMonitorTester(unittest.TestCase):
         self.assertTrue(sleeper.get_status())
         self.assertEqual(self.events.get(), monitor.ProcStart(sleeper))
 
+        # Next, ensure that we can't start another copy of this process
+        with self.assertRaises(ValueError):
+            sleeper.start()
+
         # Wait for the child to die, and ensure that it took about 10s
         self.assertEqual(self.events.get(timeout=20), monitor.ProcStop(sleeper))
         stop_time = time.time()
@@ -37,6 +41,13 @@ class ChildMonitorTester(unittest.TestCase):
 
         # Ensure that the process is not reported as running
         self.assertTrue(not sleeper.get_status())
+
+        # Ensure that we get errors trying to kill a dead process
+        with self.assertRaises(ValueError):
+            sleeper.quit()
+
+        with self.assertRaises(ValueError):
+            sleeper.kill()
 
     def test_stop_process(self):
         """
