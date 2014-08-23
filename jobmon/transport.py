@@ -16,14 +16,6 @@ For Clients
 - :class:`CommandPipe` is a synchronous stream of commands and responses.
   Clients submit requests to the supervisor, and then the supervisor does an
   action and returns a response back to the client.
-
-For The Supervisor
-~~~~~~~~~~~~~~~~~~
-
-- :class:`EventDispatcher` manages a server socket, and then sends out events
-  to all connected clients as those events come in.
-- :class:`CommandProcessor` manages a server socket, and then dispatches on
-  commands as they come in, sending the result back to the originator.
 """
 
 from jobmon import protocol
