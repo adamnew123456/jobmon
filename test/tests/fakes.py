@@ -1,9 +1,14 @@
 """
 'Faked' (or mocked) objects which are useful for testing.
 """
+import logging
 import os
 
 from jobmon import transport
+
+# Since the supervisor uses the logging module, dump all the messages since
+# we're not testing those
+logging.basicConfig(level=logging.DEBUG)
 
 class FakeOneWaySocket:
     """

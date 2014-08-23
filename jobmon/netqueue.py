@@ -14,6 +14,7 @@ it pushes responses onto another queue - the thread which handles output queue
 is also provided by this module.
 """
 from collections import namedtuple
+import logging
 import os
 import queue
 import select
@@ -92,6 +93,7 @@ class NetworkCommandQueue:
         server_socket.setblocking(False)
         server_socket.bind(self.sock_path)
         server_socket.listen(25)
+        logging.info('Listening on %s for commands', server_socket)
 
         while True:
             # Since we need to know if the main thread wants to kill us, wait
@@ -107,6 +109,7 @@ class NetworkCommandQueue:
                 # data we want, then drop them to avoid getting hung up
                 try:
                     message = protocol.recv_message(client)
+                    logging.info('Received %s on %s', message, client)
                     self.net_input.put(SocketMessage(message, client))
                 except BlockingIOError:
                     client.close()
@@ -125,6 +128,7 @@ class NetworkCommandQueue:
             try:
                 request = self.net_output.get(timeout=5)
                 protocol.send_message(request.message, request.socket)
+                logging.info('Sending %s to %s', request.message, request.socket)
                 request.socket.close()
             except queue.Empty:
                 pass
@@ -191,11 +195,13 @@ class NetworkEventQueue:
         while True:
             try:
                 event = self.event_output.get(timeout=5)
+                logging.info('Pushing out event to %d listeners', len(self.connections))
 
                 with self.connections_modifier_lock:
                     for peer in self.connections:
                         try:
                             protocol.send_message(event, peer)
+                            logging.info('- %s', peer)
                         except OSError:
                             # Since we're locking the connections set, dead
                             # connections can't be removed. Since the
@@ -206,6 +212,7 @@ class NetworkEventQueue:
                 pass
 
             if self.quit_event.isSet():
+                logging.info('Event thread exiting')
                 break
 
     def handle_connections(self):
@@ -218,6 +225,7 @@ class NetworkEventQueue:
         server_socket.bind(self.sock_path)
         server_socket.listen(5)
         self.server_listening.set()
+        logging.info('Dispatching events via %s', server_socket)
 
         while True:
             rlist, wlist, xlist = select.select([server_socket] + list(self.connections),
@@ -226,6 +234,7 @@ class NetworkEventQueue:
                 if reader is server_socket:
                     peer, _ = server_socket.accept()
                     self.connections.add(peer)
+                    logging.info('Gained listener on %s', reader)
                 else:
                     # If there's incoming data, it could be an EOF - if we read
                     # nothing, then the peer is gone
@@ -233,8 +242,10 @@ class NetworkEventQueue:
                     if not data:
                         with self.connections_modifier_lock:
                             self.connections.remove(reader)
+                            logging.info('Lost listener on %s', reader)
 
             if self.quit_event.isSet():
+                logging.info('Connection thread closing')
                 break
 
         server_socket.close()

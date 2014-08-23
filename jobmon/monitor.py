@@ -8,11 +8,13 @@ subprocesses, as well as notifying the owner that the subprocesses have started
 which can handle these actions.
 """
 from collections import namedtuple
+import logging
 import os
 import select
 import signal
 import sys
 import threading
+import traceback
 
 # Constants used on the event queue, to signal that this child process has
 # started/stopped
@@ -85,47 +87,67 @@ class ChildProcess:
 
         child_pid = os.fork()
         if child_pid == 0:
-            # Put the proper file descriptors in to replace the standard
-            # streams
-            stdin = open(self.stdin)
-            stdout = open(self.stdout, 'a')
-            stderr = open(self.stderr, 'a')
+            try:
+                # Put the proper file descriptors in to replace the standard
+                # streams
+                stdin = open(self.stdin)
+                stdout = open(self.stdout, 'a')
+                stderr = open(self.stderr, 'a')
 
-            os.dup2(stdin.fileno(), sys.stdin.fileno())
-            os.dup2(stdout.fileno(), sys.stdout.fileno())
-            os.dup2(stderr.fileno(), sys.stderr.fileno())
+                os.dup2(stdin.fileno(), sys.stdin.fileno())
+                os.dup2(stdout.fileno(), sys.stdout.fileno())
+                os.dup2(stderr.fileno(), sys.stderr.fileno())
 
-            stdin.close()
-            stdout.close()
-            stderr.close()
+                stdin.close()
+                stdout.close()
+                stderr.close()
 
-            # Update the child's environment with whatever variables were
-            # given to us
-            child_env = dict(os.environ)
-            child_env.update(self.env)
+                # Update the child's environment with whatever variables were
+                # given to us
+                child_env = dict(os.environ)
+                child_env.update(self.env)
 
-            # Change the directory to the preferred working directory for the
-            # child
-            if self.working_dir is not None:
-                os.chdir(self.working_dir)
+                # Change the directory to the preferred working directory for the
+                # child
+                if self.working_dir is not None:
+                    os.chdir(self.working_dir)
 
-            # Run the child - to avoid keeping around an extra process, go
-            # ahead and pass the command to a subshell, which will replace
-            # this process
-            os.execvpe('/bin/sh', ['/bin/sh', '-c', self.program], child_env)
 
-            # Just in case we fail, we need to avoid exiting this routine
-            sys.exit(1)
+                # Run the child - to avoid keeping around an extra process, go
+                # ahead and pass the command to a subshell, which will replace
+                # this process
+                os.execvpe('/bin/sh', ['/bin/sh', '-c', self.program], child_env)
+            except:
+                # If the child process dies for any reason, print out the
+                # error before we die
+                traceback.print_tb()
+            finally: 
+                # Just in case we fail, we need to avoid exiting this routine
+                sys.exit(1)
         else:
             self.child_pid = child_pid
             self.event_queue.put(ProcStart(self))
+
+            logging.info('Starting child process')
+            logging.info('- command = "%s"', self.program)
+            logging.info('- stdin = %s', self.stdin)
+            logging.info('- sdout = %s', self.stdout)
+            logging.info('- stderr = %s', self.stderr)
+            logging.info('- environment')
+            for var, value in self.env.items():
+                logging.info('* "%s" = "%s"', var, value)
+            logging.info('- working directory = %s',
+                self.working_dir if self.working_dir is not None
+                else os.getcwd())
 
             def wait_for_subprocess():
                 # Since waitpid() is synchronous (doing it asynchronously takes
                 # a good deal more work), the waiting is done in a worker thread
                 # whose only job is to wait until the child dies, and then to
                 # notify the parent
+                logging.info('Waiting on "%s"', self.program)
                 pid, status = os.waitpid(self.child_pid, 0)
+                logging.info('"%s" died', self.program)
                 self.event_queue.put(ProcStop(self))
                 self.child_pid = None
 
@@ -138,6 +160,7 @@ class ChildProcess:
         Forcibly kills the subprocess.
         """
         if self.child_pid is not None:
+            logging.info('Sending KILL to "%s"', self.program)
             os.kill(self.child_pid, signal.SIGKILL)
         else:
             raise ValueError('Child process not running - cannot kill it')
