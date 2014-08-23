@@ -221,13 +221,21 @@ def recv_message(sock):
     # should be.
     length_header = sock.recv(4)
     while len(length_header) < 4:
-        length_header += sock.recv(4 - len(length_header))
+        chunk = sock.recv(4 - len(length_header))
+        if not chunk:
+            raise OSError('Peer dropped us')
+
+        length_header += chunk
     (body_length,) = struct.unpack('>I', length_header)
 
     # Read in and decode the raw JSON into UTF-8
     raw_json_body = b''
     while len(raw_json_body) < body_length:
-        raw_json_body += sock.recv(body_length - len(raw_json_body))
+        chunk = sock.recv(body_length - len(raw_json_body))
+        if not chunk:
+            raise OSError('Peer dropped us')
+
+        raw_json_body += chunk
     json_body = raw_json_body.decode('utf-8')
 
     json_data = json.loads(json_body)
