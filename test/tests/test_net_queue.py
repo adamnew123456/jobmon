@@ -8,6 +8,7 @@ the means of transport.
 import queue
 import socket
 import threading
+import time
 import unittest
 
 from jobmon import netqueue, protocol, transport
@@ -15,12 +16,12 @@ from tests import fakes
 
 TEST_SOCKET_FILENAME = '/tmp/jobmon-netqueue-test'
 
-class NetQueueTester(unittest.TestCase):
+class CommandNetQueueTester(unittest.TestCase):
     def setUp(self):
         # Create a new netqueue, bound to a fresh input queue
         self.in_queue = queue.Queue()
-        self.netqueue = netqueue.NetworkQueue(TEST_SOCKET_FILENAME, 
-                                              self.in_queue)
+        self.netqueue = netqueue.NetworkCommandQueue(TEST_SOCKET_FILENAME, 
+                                                     self.in_queue)
         self.out_queue = self.netqueue.net_output
 
         self.netqueue.start()
@@ -64,3 +65,28 @@ class NetQueueTester(unittest.TestCase):
         # Wait for our partner before returning, since we don't want it to
         # get lost and live longer than it needs to
         thread.join()
+
+class EventNetQueueTester(unittest.TestCase):
+    def setUp(self):
+        self.netqueue = netqueue.NetworkEventQueue(TEST_SOCKET_FILENAME)
+        self.out_queue = self.netqueue.event_output
+        self.netqueue.start()
+
+    def tearDown(self):
+        self.netqueue.stop()
+
+    def test_event(self):
+        # Wait for the netqueue to set up its socket
+        self.netqueue.server_listening.wait()
+
+        # Set up an event pipe, and connect it to the network event queue
+        client_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        client_socket.connect(TEST_SOCKET_FILENAME)
+        event_stream = fakes.FakeEventStream(client_socket)
+
+        # Push an event into the network queue's event sink
+        the_event = protocol.Event('a-job', protocol.EVENT_STARTJOB)
+        self.out_queue.put(the_event)
+        
+        # Make sure that we get the event
+        self.assertEqual(event_stream.next_event(), the_event)
