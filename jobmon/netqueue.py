@@ -23,6 +23,9 @@ import threading
 
 from jobmon import protocol, transport
 
+# How long for threads to wait before checking their quit events
+THREAD_TIMEOUT = 2
+
 # A message received from a socket, or a message to send to a socket
 SocketMessage = namedtuple('SocketMessage', ['message', 'socket'])
 
@@ -99,7 +102,8 @@ class NetworkCommandQueue:
             # Since we need to know if the main thread wants to kill us, wait
             # for clients asynchronously, and handle the quit event if it is
             # sent to us
-            connections, _, _ = select.select([server_socket], [], [], 5)
+            connections, _, _ = select.select([server_socket], [], [], 
+                                              THREAD_TIMEOUT)
 
             if connections:
                 client, _ = server_socket.accept()
@@ -126,7 +130,7 @@ class NetworkCommandQueue:
         """
         while True:
             try:
-                request = self.net_output.get(timeout=5)
+                request = self.net_output.get(timeout=THREAD_TIMEOUT)
                 protocol.send_message(request.message, request.socket)
                 logging.info('Sending %s to %s', request.message, request.socket)
                 request.socket.close()
@@ -194,7 +198,7 @@ class NetworkEventQueue:
         """
         while True:
             try:
-                event = self.event_output.get(timeout=5)
+                event = self.event_output.get(timeout=THREAD_TIMEOUT)
                 logging.info('Pushing out event to %d listeners', len(self.connections))
 
                 with self.connections_modifier_lock:
@@ -229,7 +233,7 @@ class NetworkEventQueue:
 
         while True:
             rlist, wlist, xlist = select.select([server_socket] + list(self.connections),
-                                                [], [], 5)
+                                                [], [], THREAD_TIMEOUT)
             for reader in rlist:
                 if reader is server_socket:
                     peer, _ = server_socket.accept()
