@@ -91,8 +91,6 @@ class FakeEventStream(transport.EventStream):
     """
     def __init__(self, sock):
         self.sock = sock
-        self.sock.connect(None)
-        self.connected = False
 
 class FakeCommandPipe(transport.CommandPipe):
     """
