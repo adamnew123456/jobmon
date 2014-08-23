@@ -27,16 +27,7 @@ class ChildProcess:
         :param queue.Queue event_queue: The event queue to start/stop events to.
         :param str program: The program to run, in a format supported by  \
         "system()".
-        :param config: Various configuration options - these include:
-
-        - ``stdin`` is the name of the file to hook up to the child process's \
-        standard input.
-        - ``stdout`` is the name of the file to hook up the child process's \
-        standard output.
-        - ``stderr`` is the name of the file to hook up the child process's \
-        standard error.
-        - ``env`` is the environment to pass to the child process.
-        - ``cwd`` sets the working directory of the child process.
+        :param str config: See :meth:`config` for the meaning of these options.
         """
         self.event_queue = event_queue
         self.program = program
@@ -48,6 +39,23 @@ class ChildProcess:
         self.env = {}
         self.working_dir = None
 
+        self.config(**config)
+
+    def config(self, **config):
+        """
+        Configures various options of this child process.
+
+        :param config: Various configuration options - these include:
+
+        - ``stdin`` is the name of the file to hook up to the child process's \
+        standard input.
+        - ``stdout`` is the name of the file to hook up the child process's \
+        standard output.
+        - ``stderr`` is the name of the file to hook up the child process's \
+        standard error.
+        - ``env`` is the environment to pass to the child process.
+        - ``cwd`` sets the working directory of the child process.
+        """
         for config_name, config_value in config.items():
             if config_name == 'stdin':
                 self.stdin = config_value
