@@ -4,6 +4,7 @@ processes correctly.
 """
 import os
 import queue
+import signal
 import tempfile
 import time
 import unittest
@@ -169,4 +170,47 @@ class ChildMonitorTester(unittest.TestCase):
         with open(stdout_name) as f:
             content = f.read()
             self.assertEqual(content, '/tmp\n')
+        os.remove(stdout_name)
+
+    def test_child_sig(self):
+        """
+        Ensures that the monitor sends the proper signal to the child.
+        """
+        stdout_name = tempfile.mktemp(prefix='jobmon', suffix='stdout')
+       
+        # We have to use some complicated methods to get this to work.
+        # Basically, this shell script traps USR1 (which is what we care about,
+        # as opposed to the default SIGTERM, which is ignored) and exits when
+        # it gets it, writing some output so we can verify it worked. The sleep
+        # has to be run in the background so that way the shell can handle the
+        # signal sent to it - otherwise, the trap is ignored.
+        sleeper = monitor.ChildProcess(self.events, 
+'''
+on_usr_1() {
+    echo Done
+    exit
+}
+trap on_usr_1 USR1
+trap "" TERM
+sleep 10 & 
+wait
+''',
+            stdout=stdout_name,
+            stderr='/tmp/ERRLOG',
+            sig=signal.SIGUSR1)
+
+        sleeper.start()
+        self.assertEqual(self.events.get(), monitor.ProcStart(sleeper))
+
+        # Give the process time to run and start waiting
+        time.sleep(5)
+
+        sleeper.kill()
+        self.assertEqual(self.events.get(), monitor.ProcStop(sleeper))
+
+        # Check the log file to ensure that it printed "Done"
+        with open(stdout_name) as f:
+            content = f.read()
+            self.assertEqual(content, 'Done\n')
+
         os.remove(stdout_name)

@@ -40,6 +40,7 @@ class ChildProcess:
         self.stderr = '/dev/null'
         self.env = {}
         self.working_dir = None
+        self.exit_signal = signal.SIGTERM
 
         self.config(**config)
 
@@ -57,6 +58,7 @@ class ChildProcess:
         standard error.
         - ``env`` is the environment to pass to the child process.
         - ``cwd`` sets the working directory of the child process.
+        - ``sig`` sets the signal to send when terminating the child process.
         """
         for config_name, config_value in config.items():
             if config_name == 'stdin':
@@ -69,6 +71,8 @@ class ChildProcess:
                 self.env = config_value
             elif config_name == 'cwd':
                 self.working_dir = config_value
+            elif config_name == 'sig':
+                self.exit_signal = config_value
             else:
                 raise NameError('No configuration option "{}"'.format(
                                 config_name))
@@ -88,6 +92,10 @@ class ChildProcess:
         child_pid = os.fork()
         if child_pid == 0:
             try:
+                # Create a new process group, so that we don't end up killing
+                # ourselves if we kill this child
+                os.setpgid(0, 0)
+
                 # Put the proper file descriptors in to replace the standard
                 # streams
                 stdin = open(self.stdin)
@@ -161,7 +169,11 @@ class ChildProcess:
         """
         if self.child_pid is not None:
             logging.info('Sending KILL to "%s"', self.program)
-            os.kill(self.child_pid, signal.SIGKILL)
+
+            # Ensure all descendants of the process, not just the process itself,
+            # die
+            proc_group = os.getpgid(self.child_pid)
+            os.killpg(proc_group, self.exit_signal)
         else:
             raise ValueError('Child process not running - cannot kill it')
 
