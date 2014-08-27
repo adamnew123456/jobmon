@@ -1,0 +1,10 @@
+#!/bin/sh
+on_usr_1() {
+    echo Done
+    exit
+}
+
+trap on_usr_1 USR1
+trap "" TERM
+sleep 10 & 
+wait
