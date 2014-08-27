@@ -115,7 +115,7 @@ class NetworkCommandQueue:
                     message = protocol.recv_message(client)
                     logging.info('Received %s on %s', message, client)
                     self.net_input.put(SocketMessage(message, client))
-                except BlockingIOError:
+                except OSError:
                     client.close()
 
             if self.quit_event.isSet():
