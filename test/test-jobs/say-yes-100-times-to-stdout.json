@@ -1,0 +1,5 @@
+"log-stdout":
+{
+    "command": "test-jobs/say-yes-100-times-to-stdout",
+    "stdout": "/tmp/yes-100-stdout"
+}

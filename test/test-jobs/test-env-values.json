@@ -1,0 +1,8 @@
+{
+    "env-values":
+    {
+        "command": "test-jobs/print-env",
+        "stdout": "/tmp/env-test",
+        "env": {"A": "a", "B": "b"}
+    }
+}

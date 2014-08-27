@@ -1,0 +1,8 @@
+{
+    "exit-on-signal":
+    {
+        "command": "test-jobs/exit-on-signal",
+        "stdout": "/tmp/signal-test",
+        "signal": 10
+    }
+}
