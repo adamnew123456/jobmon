@@ -1,6 +1,6 @@
 {
     "queryable-task": 
     {
-        "command": "test-jobs/sleep-for-10-seconds",
+        "command": "test-jobs/sleep-for-10-seconds"
     }
 }

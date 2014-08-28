@@ -11,7 +11,7 @@ class ConfigHandler:
     def __init__(self):
         self.jobs = {}
 
-        self.wokring_dir = '.'
+        self.working_dir = '.'
         self.control_dir = '.'
         self.includes = []
 
@@ -39,6 +39,7 @@ class ConfigHandler:
         Loads the main jobs file, extracting information from both the main
         configuration file and any included jobs files.
         """
+        logging.info('Loading main configuration file "%s"', config_file)
         with open(config_file) as config:
             config_info = json.load(config)
            
@@ -76,12 +77,13 @@ class ConfigHandler:
             self.includes = self.read_type(supervisor_map, 'include-dirs', list,
                                            self.includes)
 
-        included_jobflies = []
+        included_jobfiles = []
         for include_glob in self.includes:
-            included_logfiles += glob.glob(include_glob)
+            included_jobfiles += glob.glob(include_glob)
 
         for filename in included_jobfiles:
             try:
+                logging.info('Loading job file "%s"', filename)
                 with open(filename) as jobfile:
                     jobs_map = json.load(jobfile)
 
@@ -99,7 +101,7 @@ class ConfigHandler:
         :param dict jobs_map: A dictionary of jobs, indexed by name.
         """
         for job_name, job in jobs_map.items():
-            logging.warning('Parsing info for %s', job_name)
+            logging.info('Parsing info for %s', job_name)
             if 'command' not in job:
                 logging.warning('Continuing - this job lacks a command', job_name)
                 continue
@@ -108,25 +110,25 @@ class ConfigHandler:
                 logging.warning('Continuing - job %s is a duplicate', job_name)
                 continue
 
-            process = monitor.ChildProcess(job['command'])
+            process = monitor.ChildProcessSkeleton(job['command'])
 
             if 'stdin' in job:
-                default_value = job.stdin
+                default_value = process.stdin
                 process.config(stdin=self.read_type(job, 'stdin', str, default_value))
             if 'stdout' in job:
-                default_value = job.stdout
+                default_value = process.stdout
                 process.config(stdout=self.read_type(job, 'stdout', str, default_value))
             if 'stderr' in job:
-                default_value = job.stderr
+                default_value = process.stderr
                 process.config(stderr=self.read_type(job, 'stderr', str, default_value))
             if 'env' in job:
-                default_value = job.env
+                default_value = process.env
                 process.config(env=self.read_type(job, 'env', dict, default_value))
             if 'cwd' in job:
-                default_value = job.working_dir
+                default_value = process.working_dir
                 process.config(cwd=self.read_type(job, 'cwd', str, default_value))
             if 'signal' in job:
-                default_value = job.exit_signal
+                default_value = process.exit_signal
                 process.config(sig=self.read_type(job, 'signal', int, default_value))
 
             self.jobs[job_name] = process

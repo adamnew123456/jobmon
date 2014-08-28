@@ -120,7 +120,6 @@ class ChildProcess:
                 if self.working_dir is not None:
                     os.chdir(self.working_dir)
 
-
                 # Run the child - to avoid keeping around an extra process, go
                 # ahead and pass the command to a subshell, which will replace
                 # this process
@@ -186,3 +185,32 @@ class ChildProcess:
         # self.child_pid is only set when the process is running, since :meth:`start`
         # sets it and the death handler unsets it.
         return self.child_pid is not None
+
+class ChildProcessSkeleton(ChildProcess):
+    def __init__(self, program, **config):
+        """
+        Creates a new :class:`ChildProcessSkeleton`, which is like a 
+        :class:`ChildProcess` but which allows the event queue to be specified 
+        later.
+
+        With the exception of the event queue, the parameters are the same as
+        :meth:`ChildProcess.__init__`.
+        """
+        super().__init__(None, program, **config)
+
+    def set_queue(self, event_queue):
+        """
+        Sets up the event queue, allowing this skeleton to be used.
+        """
+        self.event_queue = event_queue
+
+    def start(self):
+        """
+        See :meth`ChildProcess.start`.
+
+        This simply wraps that method to raise a :class:`AttributeError` if the
+        event queue has not been given.
+        """
+        if self.event_queue is None:
+            raise AttributeError('ChildProcessSkeleton was not instantiated')
+        return super().start()
