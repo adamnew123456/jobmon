@@ -78,7 +78,7 @@ class CommandProtocolTester(unittest.TestCase):
         # Also ensure that the command pipe does not need a response.
         self.command_pipe.terminate()
 
-        input_command = protocol.Command(None, protocol.CMD_STOP)
+        input_command = protocol.Command(None, protocol.CMD_QUIT)
         self.assertEqual(input_command, 
                          protocol.recv_message(self.fake_server))
 
