@@ -2,6 +2,7 @@
 Handles the supervisor role, by accepting requests over the network and
 managing children.
 """
+import logging
 import os
 import queue
 
@@ -26,6 +27,8 @@ class Supervisor:
         self.reply_queue = None
         self.event_dispatch_queue = None
 
+        self.logger = logging.getLogger('supervisor.main')
+
     def ensure_job_exists(self, job_name, sock):
         """
         Ensures that the given job exists, sending a failure response if
@@ -46,7 +49,7 @@ class Supervisor:
         :param socket.socket sock: The socket the client used to send this \
         request.
         """
-        logging.info('Request %s from %s', command, sock)
+        self.logger.info('Request %s from %s', command, sock)
 
         if command.command_code == protocol.CMD_START:
             # Try to start the given job
@@ -135,15 +138,17 @@ class Supervisor:
             elif isinstance(event, monitor.ProcStart):
                 job_name = self.job_names[event.process]
 
-                logging.info('Job %s started', job_name)
+                self.logger.info('Job %s started', job_name)
                 self.event_dispatch_queue.put(
                     protocol.Event(job_name, protocol.EVENT_STARTJOB))
             elif isinstance(event, monitor.ProcStop):
                 job_name = self.job_names[event.process]
 
-                logging.info('Job %s stopped', job_name)
+                self.logger.info('Job %s stopped', job_name)
                 self.event_dispatch_queue.put(
                     protocol.Event(job_name, protocol.EVENT_STOPJOB))
 
         net_command.stop()
         net_events.stop()
+    
+        self.logger.info('Stopping supervisor')

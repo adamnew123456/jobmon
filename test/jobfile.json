@@ -7,6 +7,6 @@
             "test-jobs/*.json"
         ],
         "log-file": "jobmon-test-output.log",
-        "log-level": "INFO"
+        "log-level": "DEBUG"
     }
 }

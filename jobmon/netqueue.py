@@ -59,6 +59,8 @@ class NetworkCommandQueue:
         self.request_thread = None
         self.response_thread = None
 
+        self.logger = logging.getLogger('supervisor.command-queue')
+
     def start(self):
         """
         Starts the network queue by launching the handler threads.
@@ -96,7 +98,7 @@ class NetworkCommandQueue:
         server_socket.setblocking(False)
         server_socket.bind(self.sock_path)
         server_socket.listen(25)
-        logging.info('Listening on %s for commands', server_socket)
+        self.logger.info('Listening on %s for commands', server_socket)
 
         while True:
             # Since we need to know if the main thread wants to kill us, wait
@@ -112,10 +114,12 @@ class NetworkCommandQueue:
                 # If the client drops, or is otherwise unable to get us the
                 # data we want, then drop them to avoid getting hung up
                 try:
+                    self.logger.info('Reading message...')
                     message = protocol.recv_message(client)
-                    logging.info('Received %s on %s', message, client)
+                    self.logger.info('Received %s on %s', message, client)
                     self.net_input.put(SocketMessage(message, client))
                 except OSError:
+                    self.logger.info('Client disconnected')
                     client.close()
 
             if self.quit_event.isSet():
@@ -132,7 +136,8 @@ class NetworkCommandQueue:
             try:
                 request = self.net_output.get(timeout=THREAD_TIMEOUT)
                 protocol.send_message(request.message, request.socket)
-                logging.info('Sending %s to %s', request.message, request.socket)
+                self.logger.info('Sending %s to %s', request.message,
+                                 request.socket)
                 request.socket.close()
             except queue.Empty:
                 pass
@@ -163,6 +168,8 @@ class NetworkEventQueue:
         self.connections = set()
         self.connections_modifier_lock = threading.Lock()
         self.server_listening = threading.Event()
+
+        self.logger = logging.getLogger('supervisor.event_queue')
 
     def start(self):
         """
@@ -199,13 +206,13 @@ class NetworkEventQueue:
         while True:
             try:
                 event = self.event_output.get(timeout=THREAD_TIMEOUT)
-                logging.info('Pushing out event to %d listeners', len(self.connections))
+                self.logger.info('Pushing out event to %d listeners', len(self.connections))
 
                 with self.connections_modifier_lock:
                     for peer in self.connections:
                         try:
                             protocol.send_message(event, peer)
-                            logging.info('- %s', peer)
+                            self.logger.info('- %s', peer)
                         except OSError:
                             # Since we're locking the connections set, dead
                             # connections can't be removed. Since the
@@ -216,7 +223,7 @@ class NetworkEventQueue:
                 pass
 
             if self.quit_event.isSet():
-                logging.info('Event thread exiting')
+                self.logger.info('Event thread exiting')
                 break
 
     def handle_connections(self):
@@ -229,7 +236,7 @@ class NetworkEventQueue:
         server_socket.bind(self.sock_path)
         server_socket.listen(5)
         self.server_listening.set()
-        logging.info('Dispatching events via %s', server_socket)
+        self.logger.info('Dispatching events via %s', server_socket)
 
         while True:
             rlist, wlist, xlist = select.select([server_socket] + list(self.connections),
@@ -238,7 +245,7 @@ class NetworkEventQueue:
                 if reader is server_socket:
                     peer, _ = server_socket.accept()
                     self.connections.add(peer)
-                    logging.info('Gained listener on %s', reader)
+                    self.logger.info('Gained listener on %s', reader)
                 else:
                     # If there's incoming data, it could be an EOF - if we read
                     # nothing, then the peer is gone
@@ -246,10 +253,10 @@ class NetworkEventQueue:
                     if not data:
                         with self.connections_modifier_lock:
                             self.connections.remove(reader)
-                            logging.info('Lost listener on %s', reader)
+                            self.logger.info('Lost listener on %s', reader)
 
             if self.quit_event.isSet():
-                logging.info('Connection thread closing')
+                self.logger.info('Connection thread closing')
                 break
 
         server_socket.close()

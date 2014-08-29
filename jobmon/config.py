@@ -26,6 +26,7 @@ LOG_LEVELS = {
 class ConfigHandler:
     def __init__(self):
         self.jobs = {}
+        self.logger = logging.getLogger('config')
 
         self.working_dir = '.'
         self.control_dir = '.'
@@ -46,7 +47,7 @@ class ConfigHandler:
         """
         value = dct[key]
         if not isinstance(value, expected_type):
-            logging.log('Expected "%s" to be a %s, but got a %s instead',
+            self.logger.log('Expected "%s" to be a %s, but got a %s instead',
                         key, expected_type, value)
             return default
 
@@ -57,24 +58,24 @@ class ConfigHandler:
         Loads the main jobs file, extracting information from both the main
         configuration file and any included jobs files.
         """
-        logging.info('Loading main configuration file "%s"', config_file)
+        self.logger.info('Loading main configuration file "%s"', config_file)
         with open(config_file) as config:
             config_info = json.load(config)
            
         if 'supervisor' in config_info:
             if not isinstance(config_info['supervisor'], dict):
-                logging.warning('supervisor configuration is not a hash')
+                self.logger.warning('supervisor configuration is not a hash')
             else:
                 self.handle_supervisor_config(config_info['supervisor'])
 
         if 'jobs' in config_info:
             if not isinstance(config_info['jobs'], dict):
-                logging.warning('jobs configuration is not a hash')
+                self.logger.warning('jobs configuration is not a hash')
             else:
                 self.handle_jobs(config_info['jobs'])
 
         if not self.jobs:
-            logging.error('No jobs are configured, aborting')
+            self.logger.error('No jobs are configured, aborting')
             raise ValueError
 
     def handle_supervisor_config(self, supervisor_map):
@@ -102,7 +103,7 @@ class ConfigHandler:
                 if log_level_name in LOG_LEVELS:
                     self.log_level = LOG_LEVELS[log_level_name]
                 else:
-                    logging.warning('%s is not a valid logging level', log_level_name)
+                    self.logger.warning('%s is not a valid self.logger.level', log_level_name)
 
         if 'log-file' in supervisor_map:
             self.log_file = self.read_type(supervisor_map, 'log-file', str, 
@@ -114,16 +115,16 @@ class ConfigHandler:
 
         for filename in included_jobfiles:
             try:
-                logging.info('Loading job file "%s"', filename)
+                self.logger.info('Loading job file "%s"', filename)
                 with open(filename) as jobfile:
                     jobs_map = json.load(jobfile)
 
                 if not isinstance(jobs_map, dict):
-                    logging.warning('"%s" is not a valid jobs file', filename)
+                    self.logger.warning('"%s" is not a valid jobs file', filename)
                 else:
                     self.handle_jobs(jobs_map)
             except OSError as ex:
-                logging.warning('Unable to open "%s" - %s', filename, ex)
+                self.logger.warning('Unable to open "%s" - %s', filename, ex)
                 raise ValueError('No jobs defined - cannot continue')
 
     def handle_jobs(self, jobs_map):
@@ -133,13 +134,13 @@ class ConfigHandler:
         :param dict jobs_map: A dictionary of jobs, indexed by name.
         """
         for job_name, job in jobs_map.items():
-            logging.info('Parsing info for %s', job_name)
+            self.logger.info('Parsing info for %s', job_name)
             if 'command' not in job:
-                logging.warning('Continuing - this job lacks a command', job_name)
+                self.logger.warning('Continuing - this job lacks a command', job_name)
                 continue
 
             if job_name in self.jobs:
-                logging.warning('Continuing - job %s is a duplicate', job_name)
+                self.logger.warning('Continuing - job %s is a duplicate', job_name)
                 continue
 
             process = monitor.ChildProcessSkeleton(job['command'])
@@ -164,7 +165,7 @@ class ConfigHandler:
                 sig_name = self.read_type(job, 'signal', str, default_value)
                 sig_name = sig_name.upper()
                 if sig_name not in SIGNAL_NAMES:
-                    logging.warning('%s it not a valid signal name', sig_name)
+                    self.logger.warning('%s it not a valid signal name', sig_name)
                 else:
                     process.config(sig=SIGNAL_NAMES[sig_name])
 

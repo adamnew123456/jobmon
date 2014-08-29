@@ -44,6 +44,8 @@ class ChildProcess:
 
         self.config(**config)
 
+        self.logger = logging.getLogger('supervisor.child-process')
+
     def config(self, **config):
         """
         Configures various options of this child process.
@@ -135,15 +137,15 @@ class ChildProcess:
 
             self.event_queue.put(ProcStart(self))
 
-            logging.info('Starting child process')
-            logging.info('- command = "%s"', self.program)
-            logging.info('- stdin = %s', self.stdin)
-            logging.info('- sdout = %s', self.stdout)
-            logging.info('- stderr = %s', self.stderr)
-            logging.info('- environment')
+            self.logger.info('Starting child process')
+            self.logger.info('- command = "%s"', self.program)
+            self.logger.info('- stdin = %s', self.stdin)
+            self.logger.info('- sdout = %s', self.stdout)
+            self.logger.info('- stderr = %s', self.stderr)
+            self.logger.info('- environment')
             for var, value in self.env.items():
-                logging.info('* "%s" = "%s"', var, value)
-            logging.info('- working directory = %s',
+                self.logger.info('* "%s" = "%s"', var, value)
+            self.logger.info('- working directory = %s',
                 self.working_dir if self.working_dir is not None
                 else os.getcwd())
 
@@ -152,9 +154,9 @@ class ChildProcess:
                 # a good deal more work), the waiting is done in a worker thread
                 # whose only job is to wait until the child dies, and then to
                 # notify the parent
-                logging.info('Waiting on "%s"', self.program)
+                self.logger.info('Waiting on "%s"', self.program)
                 pid, status = os.waitpid(self.child_pid, 0)
-                logging.info('"%s" died', self.program)
+                self.logger.info('"%s" died', self.program)
                 self.event_queue.put(ProcStop(self))
                 self.child_pid = None
 
@@ -167,7 +169,7 @@ class ChildProcess:
         Forcibly kills the subprocess.
         """
         if self.child_pid is not None:
-            logging.info('Sending signal %d to "%s"', self.exit_signal, self.program)
+            self.logger.info('Sending signal %d to "%s"', self.exit_signal, self.program)
 
             # Ensure all descendants of the process, not just the process itself,
             # die
