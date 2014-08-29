@@ -92,10 +92,6 @@ class ChildProcess:
         child_pid = os.fork()
         if child_pid == 0:
             try:
-                # Create a new process group, so that we don't end up killing
-                # ourselves if we kill this child
-                os.setpgid(0, 0)
-
                 # Put the proper file descriptors in to replace the standard
                 # streams
                 stdin = open(self.stdin)
@@ -133,6 +129,10 @@ class ChildProcess:
                 sys.exit(1)
         else:
             self.child_pid = child_pid
+            # Create a new process group, so that we don't end up killing
+            # ourselves if we kill this child
+            os.setpgid(self.child_pid, self.child_pid)
+
             self.event_queue.put(ProcStart(self))
 
             logging.info('Starting child process')
@@ -167,7 +167,7 @@ class ChildProcess:
         Forcibly kills the subprocess.
         """
         if self.child_pid is not None:
-            logging.info('Sending KILL to "%s"', self.program)
+            logging.info('Sending signal %d to "%s"', self.exit_signal, self.program)
 
             # Ensure all descendants of the process, not just the process itself,
             # die
