@@ -1,6 +1,10 @@
 #!/bin/sh
 PYTHONPATH="$(pwd):$(pwd)/test"
 
+# This is where the supervisor will put its sockets, so we have to make sure
+# this directory is available
+mkdir -p /tmp/supervisor
+
 cd test
 _TEST="$1"
 if [ -n "$_TEST" ]; then
