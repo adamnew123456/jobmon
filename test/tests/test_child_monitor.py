@@ -196,7 +196,6 @@ sleep 10 &
 wait
 ''',
             stdout=stdout_name,
-            stderr='/tmp/ERRLOG',
             sig=signal.SIGUSR1)
 
         sleeper.start()
