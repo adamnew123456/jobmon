@@ -104,3 +104,6 @@ class FakeCommandPipe(transport.CommandPipe):
     """
     def __init__(self, sock):
         self.sock = sock
+
+    def reconnect(self):
+        pass
