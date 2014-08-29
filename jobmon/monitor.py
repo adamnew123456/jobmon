@@ -124,7 +124,7 @@ class ChildProcess:
                 os.execvp('/bin/sh', ['/bin/sh', '-c', self.program])
             finally: 
                 # Just in case we fail, we need to avoid exiting this routine
-                sys.exit(1)
+                os._exit(1)
         else:
             self.child_pid = child_pid
             # Create a new process group, so that we don't end up killing
