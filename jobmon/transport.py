@@ -17,6 +17,8 @@ For Clients
   Clients submit requests to the supervisor, and then the supervisor does an
   action and returns a response back to the client.
 """
+import os.path
+import socket
 
 from jobmon import protocol
 
@@ -35,8 +37,8 @@ class EventStream:
      - Using :attr:`EventStream.fileno` to connect the socket used here with
        the :mod:`select` module.
     """
-    def __init__(self):
-        socket_path = utils.find_daemon_event_socket()
+    def __init__(self, socket_dir):
+        socket_path = os.path.join(socket_dir, 'event')
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.sock.connect(socket_path)
 
@@ -79,16 +81,24 @@ class CommandPipe:
     Note that if any of these methods are called with job names that don't
     exist, then a :class:`NameError` will be raised.
     """
-    def __init__(self):
-        socket_path = utils.find_daemon_command_socket()
+    def __init__(self, socket_dir):
+        self.socket_path = os.path.join(socket_dir, 'command')
+
+    def reconnect(self):
+        """
+        Reconnects to the command socket.
+
+        This is necessary because the server drops us after a single request.
+        """
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.sock.connect(socket_path)
+        self.sock.connect(self.socket_path)
 
     def start_job(self, job_name):
         """
         Launches a job by name.
         :param str job_name: The name of the job to launch.
         """
+        self.reconnect()
         msg = protocol.Command(job_name, protocol.CMD_START)
         protocol.send_message(msg, self.sock)
         result = protocol.recv_message(self.sock)
@@ -108,6 +118,7 @@ class CommandPipe:
         Terminates a job by name.
         :param str job_name: The name of the job to terminate.
         """
+        self.reconnect()
         msg = protocol.Command(job_name, protocol.CMD_STOP)
         protocol.send_message(msg, self.sock)
         result = protocol.recv_message(self.sock)
@@ -128,6 +139,7 @@ class CommandPipe:
         :param str job_name: The name of the job to query.
         :return: ``True`` if the job is running, ``False`` otherwise.
         """
+        self.reconnect()
         msg = protocol.Command(job_name, protocol.CMD_STATUS)
         protocol.send_message(msg, self.sock)
         result = protocol.recv_message(self.sock)
@@ -147,6 +159,7 @@ class CommandPipe:
         :return: A :class:`dict` where each key is a job name and each value \
         is ``True`` if the job is running or ``False`` otherwise.
         """
+        self.reconnect()
         msg = protocol.Command(None, protocol.CMD_JOB_LIST)
         protocol.send_message(msg, self.sock)
         result = protocol.recv_message(self.sock)
@@ -160,7 +173,8 @@ class CommandPipe:
         """
         Terminates the supervisor.
         """
-        msg = protocol.Command(None, protocol.CMD_STOP)
+        self.reconnect()
+        msg = protocol.Command(None, protocol.CMD_QUIT)
         protocol.send_message(msg, self.sock)
 
     def destroy(self):
