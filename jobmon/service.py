@@ -13,7 +13,7 @@ class Supervisor:
         Creates a new :class:`Supervisor`.
 
         :param dict jobs: All the jobs, indexed by name, stored as \
-        :class:`jobmon.monitor.ChildProcess` objects.
+        :class:`jobmon.monitor.ChildProcessSkeleton` objects.
         :param str control_path: Where to store the control sockets.
         """
         self.jobs = jobs
@@ -109,6 +109,10 @@ class Supervisor:
         command_sock = os.path.join(self.control_path, 'command')
         event_sock = os.path.join(self.control_path, 'event')
         self.event_queue = queue.Queue()
+
+        # Since the child processes we are given are actually skeletons
+        for skeleton in self.jobs:
+            skeleton.set_queue(self.event_queue)
 
         # First, launch up the netqueue support threads to take care of our
         # networking
