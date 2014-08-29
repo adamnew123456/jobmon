@@ -2,6 +2,8 @@
 Ensures that the configuration parser loads the correct jobs, as defined in the
 test job files.
 """
+import logging
+import signal
 import unittest
 
 from jobmon import config
@@ -19,6 +21,8 @@ class ConfigHandlerTest(unittest.TestCase):
 
         self.assertEqual(configuration.working_dir, '.')
         self.assertEqual(configuration.control_dir, '/tmp/supervisor')
+        self.assertEqual(configuration.log_level, logging.INFO)
+        self.assertEqual(configuration.log_file, 'jobmon-test-output.log')
 
         # For the first test, ensure all the defaults are kept for values that
         # are unspecified
@@ -29,7 +33,7 @@ class ConfigHandlerTest(unittest.TestCase):
         self.assertEqual(signal_test_job.stderr, '/dev/null')
         self.assertEqual(signal_test_job.env, {})
         self.assertEqual(signal_test_job.working_dir, None)
-        self.assertEqual(signal_test_job.exit_signal, 10) # This is really USR1
+        self.assertEqual(signal_test_job.exit_signal, signal.SIGUSR1)
 
         # For the rest, just test what was changed
         log_stdout_job = configuration.jobs['log-stdout']

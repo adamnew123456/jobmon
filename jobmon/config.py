@@ -4,8 +4,24 @@ Reads in the configuration file, storing all the configured settings and jobs.
 import glob
 import json
 import logging
+import signal
 
 from jobmon import monitor
+
+SIGNAL_NAMES = {
+    sig_name: getattr(signal, sig_name) for sig_name in dir(signal)
+
+    # All of the signals are named consistently in the signal module, but some
+    # constants (SIG_IGN, SIG_BLOCK, etc.) are named 'SIG*' but which are not
+    # actually signals
+    if sig_name.startswith('SIG') and '_' not in sig_name
+}
+
+LOG_LEVELS = {
+    log_level: getattr(logging, log_level) 
+    for log_level in ('CRITICAL', 'DEBUG', 'ERROR', 'FATAL', 'INFO', 'WARN',
+                      'WARNING')
+}
 
 class ConfigHandler:
     def __init__(self):
@@ -14,6 +30,8 @@ class ConfigHandler:
         self.working_dir = '.'
         self.control_dir = '.'
         self.includes = []
+        self.log_level = logging.WARNING
+        self.log_file = '/dev/null'
 
     def read_type(self, dct, key, expected_type, default=None):
         """
@@ -77,6 +95,19 @@ class ConfigHandler:
             self.includes = self.read_type(supervisor_map, 'include-dirs', list,
                                            self.includes)
 
+        if 'log-level' in supervisor_map:
+            log_level_name = self.read_type(supervisor_map, 'log-level', str, None)
+            if log_level_name is not None:
+                log_level_name = log_level_name.upper()
+                if log_level_name in LOG_LEVELS:
+                    self.log_level = LOG_LEVELS[log_level_name]
+                else:
+                    logging.warning('%s is not a valid logging level', log_level_name)
+
+        if 'log-file' in supervisor_map:
+            self.log_file = self.read_type(supervisor_map, 'log-file', str, 
+                                           self.log_file)
+
         included_jobfiles = []
         for include_glob in self.includes:
             included_jobfiles += glob.glob(include_glob)
@@ -93,6 +124,7 @@ class ConfigHandler:
                     self.handle_jobs(jobs_map)
             except OSError as ex:
                 logging.warning('Unable to open "%s" - %s', filename, ex)
+                raise ValueError('No jobs defined - cannot continue')
 
     def handle_jobs(self, jobs_map):
         """
@@ -129,6 +161,11 @@ class ConfigHandler:
                 process.config(cwd=self.read_type(job, 'cwd', str, default_value))
             if 'signal' in job:
                 default_value = process.exit_signal
-                process.config(sig=self.read_type(job, 'signal', int, default_value))
+                sig_name = self.read_type(job, 'signal', str, default_value)
+                sig_name = sig_name.upper()
+                if sig_name not in SIGNAL_NAMES:
+                    logging.warning('%s it not a valid signal name', sig_name)
+                else:
+                    process.config(sig=SIGNAL_NAMES[sig_name])
 
             self.jobs[job_name] = process
