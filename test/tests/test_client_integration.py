@@ -7,25 +7,36 @@ import sys
 import time
 import unittest
 
-from jobmon import launcher, protocol, transport
+from jobmon import config, launcher, protocol, transport
+from tests import fakes # Setup logging
 
 class ClientItegrationTest(unittest.TestCase):
-    def setUp(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.config_handler = config.ConfigHandler()
+        self.config_handler.load('jobfile.json')
 
+    def setUp(self):
         # Connect to the supervisor. This comes in two parts - on one hand, the
         # supervisor has an event-dispatching system which will tell us when jobs have
         # ended, and a command pipe which will allow us to query things.
-        jobfile = os.path.join(os.path.dirname(__file__), 'jobfile.json')
-        launcher.run_server(config=jobfile)
+        launcher.run(self.config_handler)
 
-        self.job_events = transport.EventStream()
-        self.job_commands = transport.CommandPipe()
+        # Wait for the daemon to run a bit so that it can open the sockets
+        # used below
+        time.sleep(5)
+
+        self.job_events = transport.EventStream(self.config_handler.control_dir)
+        self.job_commands = transport.CommandPipe(self.config_handler.control_dir)
 
     def tearDown(self):
         # Destroy the connections so that they get closed cleanly
         self.job_events.destroy()
         self.job_commands.terminate()
         self.job_commands.destroy()
+
+        # Wait for the supervisor to close
+        time.sleep(5)
 
     def test_query(self):
         # First, start off by testing out the 'queryable-task' job. This task is meant
@@ -36,8 +47,8 @@ class ClientItegrationTest(unittest.TestCase):
 
         # Wait for the event which fires when the job starts
         event = self.job_events.next_event()
-        self.assertEqual(event.event_code, protocol.EVENT_START)
-        self.assertEqual(event.job, 'queryable-task')
+        self.assertEqual(event.event_code, protocol.EVENT_STARTJOB)
+        self.assertEqual(event.job_name, 'queryable-task')
 
         # Now, wait repeatedly and ensure the job is still running after each wait.
         for x in range(5):
@@ -46,8 +57,8 @@ class ClientItegrationTest(unittest.TestCase):
 
         # Finally, wait for the next event. Ensure that it is our process dying.
         event = self.job_events.next_event()
-        self.assertEqual(event.event_code, protocol.EVENT_TERMINATE)
-        self.assertEqual(event.job, 'queryable-task')
+        self.assertEqual(event.event_code, protocol.EVENT_STOPJOB)
+        self.assertEqual(event.job_name, 'queryable-task')
 
         # Ensure that the process isn't reported as running when we ask
         self.assertFalse(self.job_commands.is_running('queryable-task'))
@@ -62,7 +73,7 @@ class ClientItegrationTest(unittest.TestCase):
 
         # Now, ensure the job is running, and then kill it.
         self.assertTrue(self.job_commands.is_running('queryable-task'))
-        self.assertTrue(self.job_commands.stop_job('queryable-task'))
+        self.job_commands.stop_job('queryable-task')
 
         # Wait for the event which fires when the job ends.
         self.job_events.next_event()
@@ -79,32 +90,34 @@ class ClientItegrationTest(unittest.TestCase):
 
     def test_unknown_job(self):
         with self.assertRaises(NameError):
-            self.job_command.start_job('not-a-job')
+            self.job_commands.start_job('not-a-job')
 
         with self.assertRaises(NameError):
-            self.job_command.stop_job('not-a-job')
+            self.job_commands.stop_job('not-a-job')
 
         with self.assertRaises(NameError):
-            self.job_command.is_running('not-a-job')
+            self.job_commands.is_running('not-a-job')
 
     def test_job_list(self):
         # First, start the long job so that we can differentiate between
         # stopped and running jobs.
-        self.job_commands.start_jo('queryable-task')
+        self.job_commands.start_job('queryable-task')
         self.job_events.next_event()
 
         # Query the list of jobs
         job_list = self.job_commands.get_jobs()
         self.assertEqual(job_list,
                 {'queryable-task': True, 'log-stdout': False, 
-                 'log-stderr': False, 'env-values': False})
+                 'log-stderr': False, 'env-values': False,
+                 'exit-on-signal': False})
 
         # Wait for the job to die and run the query again
         self.job_events.next_event()
         job_list = self.job_commands.get_jobs()
         self.assertEqual(job_list,
                 {'queryable-task': False, 'log-stdout': False, 
-                 'log-stderr': False, 'env-values': False})
+                 'log-stderr': False, 'env-values': False,
+                 'exit-on-signal': False})
 
     def test_job_enter_existing_state(self):
         # Start a long running job, so that way we have time to try to start
@@ -164,6 +177,8 @@ class ClientItegrationTest(unittest.TestCase):
         self.job_commands.start_job('env-values')
         self.job_events.next_event()
 
+        self.job_events.next_event()
+
         # Make sure that the log contains the values 'a' and 'b', since those
         # were the ones passed in via the environment, and nothing else.
         with open('/tmp/env-test') as env_log:
@@ -173,3 +188,20 @@ class ClientItegrationTest(unittest.TestCase):
 
         # Clean up the log file
         os.remove('/tmp/env-test')
+
+    def test_signals(self):
+        # Run the 'exit-on-signal' job, which catches only SIGUSR1
+        self.job_commands.start_job('exit-on-signal')
+        self.job_events.next_event()
+
+        # Wait a few seconds for the program to set up its signal handlers,
+        # and then kill it
+        self.job_commands.stop_job('exit-on-signal')
+        self.job_events.next_event()
+
+        # Ensure that it logged the word 'Done', as it should have when it ran
+        # its signal handler
+        with open('/tmp/signal-test') as sig_log:
+            self.assertEqual(sig_log.read(), 'Done\n')
+
+        os.remove('/tmp/signal-test')
