@@ -110,8 +110,8 @@ class ChildProcess:
 
                 # Update the child's environment with whatever variables were
                 # given to us
-                child_env = dict(os.environ)
-                child_env.update(self.env)
+                for key, value in self.env.items():
+                    os.environ[key] = value
 
                 # Change the directory to the preferred working directory for the
                 # child
@@ -121,11 +121,7 @@ class ChildProcess:
                 # Run the child - to avoid keeping around an extra process, go
                 # ahead and pass the command to a subshell, which will replace
                 # this process
-                os.execvpe('/bin/sh', ['/bin/sh', '-c', self.program], child_env)
-            except:
-                # If the child process dies for any reason, print out the
-                # error before we die
-                traceback.print_tb()
+                os.execvp('/bin/sh', ['/bin/sh', '-c', self.program])
             finally: 
                 # Just in case we fail, we need to avoid exiting this routine
                 sys.exit(1)
