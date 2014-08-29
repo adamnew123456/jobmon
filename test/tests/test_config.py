@@ -21,7 +21,7 @@ class ConfigHandlerTest(unittest.TestCase):
 
         self.assertEqual(configuration.working_dir, '.')
         self.assertEqual(configuration.control_dir, '/tmp/supervisor')
-        self.assertEqual(configuration.log_level, logging.INFO)
+        self.assertEqual(configuration.log_level, logging.DEBUG)
         self.assertEqual(configuration.log_file, 'jobmon-test-output.log')
 
         # For the first test, ensure all the defaults are kept for values that
@@ -48,6 +48,6 @@ class ConfigHandlerTest(unittest.TestCase):
         self.assertEqual(queryable_task_job.program, 'test-jobs/sleep-for-10-seconds')
 
         env_values_job = configuration.jobs['env-values']
-        self.assertEqual(env_values_job.program, 'test-jobs/print-env')
+        self.assertEqual(env_values_job.program, 'test-jobs/test-env-values')
         self.assertEqual(env_values_job.stdout, '/tmp/env-test')
         self.assertEqual(env_values_job.env, {'A': 'a', 'B': 'b'})
