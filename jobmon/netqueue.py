@@ -13,7 +13,7 @@ supervisor to use a single input queue. In order for the supervisor to reply,
 it pushes responses onto another queue - the thread which handles output queue
 is also provided by this module.
 """
-from collections import namedtuple
+from collections import deque, namedtuple
 import logging
 import os
 import queue
@@ -145,6 +145,62 @@ class NetworkCommandQueue:
             if self.quit_event.isSet():
                 break
 
+class UndoableQueue(queue.Queue):
+    """
+    A queue which can have elements put back onto the front if they are not
+    processed.
+    """
+    def __init__(self, maxsize=0, max_backlog=0):
+        """
+        Create a new :class:`UndoableQueue`.
+
+        :param int maxsize: The maximum size of the queue, *not* including \
+        the backlog.
+        :param int max_backlog: The maximum size of the backlog, or 0 for an \
+        unlimited size.
+        """
+        super().__init__(maxsize)
+
+        # Ideally, this queue would be usable by multiple consumers/producers
+        # (although this code doesn't need that capability), so we need to
+        # protect the ungotten list.
+        self.unget_lock = threading.Lock()
+
+        # Where 'ungotten' elements are stored when they are put back onto the
+        # head of the queue
+        self.ungotten = deque()
+
+        # The ungotten backlog can be of a finite size
+        self.ungotten_size = max_backlog
+
+    def unget(self, item):
+        """
+        Puts an element back onto the head of the queue.
+
+        :param item: The object to put back onto the queue.
+        """
+        with self.unget_lock:
+            if self.ungotten_size > 0 and len(self.ungotten) >= self.ungotten_size:
+                # Rotate the first element out of the backlog, thus maintaining
+                # the size when we add the next element
+                self.ungotten.popleft()
+
+            self.ungotten.append(item)
+
+    def get(self, block=True, timeout=None):
+        """
+        Checks to see if any element can be removed from the queue, and returns
+        that element if it does. See :meth:`queue.Queue.get` for the meaning of
+        the other arguments.
+
+        :return: The element on the head of the queue, and returns that \
+        element if it does.
+        """
+        with self.unget_lock:
+            if self.ungotten:
+                return self.ungotten.popleft()
+        return super().get(block, timeout)
+
 class NetworkEventQueue:
     def __init__(self, socket_path):
         """
@@ -160,7 +216,7 @@ class NetworkEventQueue:
         :attr:`server_listening`.
         """
         self.sock_path = socket_path
-        self.event_output = queue.Queue()
+        self.event_output = UndoableQueue()
         self.quit_event = threading.Event()
 
         self.event_thread = None
@@ -206,19 +262,23 @@ class NetworkEventQueue:
         while True:
             try:
                 event = self.event_output.get(timeout=THREAD_TIMEOUT)
-                self.logger.info('Pushing out event to %d listeners', len(self.connections))
 
                 with self.connections_modifier_lock:
-                    for peer in self.connections:
-                        try:
-                            protocol.send_message(event, peer)
-                            self.logger.info('- %s', peer)
-                        except OSError:
-                            # Since we're locking the connections set, dead
-                            # connections can't be removed. Since the
-                            # connection thread will remove them, we should
-                            # ignore them
-                            continue
+                    if not self.connections:
+                        self.logger.info('Keeping event in the queue, no listeners')
+                        self.event_output.unget(event)
+                    else:
+                        self.logger.info('Pushing out event to %d listeners', len(self.connections))
+                        for peer in self.connections:
+                            try:
+                                protocol.send_message(event, peer)
+                                self.logger.info('- %s', peer)
+                            except OSError:
+                                # Since we're locking the connections set, dead
+                                # connections can't be removed. Since the
+                                # connection thread will remove them, we should
+                                # ignore them
+                                continue
             except queue.Empty:
                 pass
 
