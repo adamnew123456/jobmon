@@ -16,3 +16,5 @@ else
         python3 -m unittest $testfile || exit 1
     done
 fi
+
+exec ./kill-daemons.sh
