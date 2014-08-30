@@ -196,6 +196,7 @@ class ClientItegrationTest(unittest.TestCase):
 
         # Wait a few seconds for the program to set up its signal handlers,
         # and then kill it
+        time.sleep(5)
         self.job_commands.stop_job('exit-on-signal')
         self.job_events.next_event()
 
