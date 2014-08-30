@@ -7,7 +7,6 @@ import signal
 import unittest
 
 from jobmon import config
-from tests import fakes # Load the logging configuration
 
 class ConfigHandlerTest(unittest.TestCase):
     def test_load_config(self):

@@ -6,10 +6,6 @@ import os
 
 from jobmon import transport
 
-# Since the supervisor uses the logging module, dump all the messages since
-# we're not testing those
-logging.basicConfig(level=logging.DEBUG)
-
 class FakeOneWaySocket:
     """
     A mock socket which contains the basic interface necessary to support the

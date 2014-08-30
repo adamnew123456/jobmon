@@ -8,7 +8,6 @@ import time
 import unittest
 
 from jobmon import config, launcher, protocol, transport
-from tests import fakes # Setup logging
 
 class ClientItegrationTest(unittest.TestCase):
     def __init__(self, *args, **kwargs):

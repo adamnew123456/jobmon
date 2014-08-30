@@ -10,7 +10,6 @@ import time
 import unittest
 
 from jobmon import monitor
-from tests import fakes # To get the logging configuration
 
 class ChildMonitorTester(unittest.TestCase):
     def setUp(self):
