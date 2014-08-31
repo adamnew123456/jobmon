@@ -105,26 +105,23 @@ indefinitely.''')
 
     command_arg.add_parser('list-jobs',
         help='''Prints out a list of jobs, and their status, in a simple space
-delimited format. For example:
-
-  STOPPED A Job
-  RUNNING Another Job
+delimited format - status first, job name second.
 ''')
 
     command_arg.add_parser('terminate', help='Kills the daemon')
 
     return arg_parser
 
-def main()
+def main():
     """
     Invokes different tools, depending upon what arguments are passed in.
     """
-    control_dir = os.environ['JOBMON_CONTROL_DIR']
+    control_dir = os.environ.get('JOBMON_CONTROL_DIR', '')
     
     parser = load_arg_parser()
     args = parser.parse_args(sys.argv[1:])
 
-    if args.context is None:
+    if args.command is None:
         # If the usage was incorrect, then just print out a brief summary
         parser.print_usage()
         return 1
@@ -168,13 +165,13 @@ def main()
         try:
             command_pipe = transport.CommandPipe(control_dir)
             command_pipe.start_job(args.JOB)
-        except ConnectionError:
+        except IOError:
             print('Server dropped our connection.',
-                  file=sys.sdterr)
+                  file=sys.stderr)
             return 1
         except OSError as err:
             print(os.strerror(err.errno),
-                    'Is $JOBMON_CONTROL_DIR set?')
+                    'Is $JOBMON_CONTROL_DIR set?',
                   file=sys.stderr)
             return 1
         except NameError:
@@ -185,18 +182,18 @@ def main()
             return 1
 
         return 0
-    elif args.command == 'stop'
+    elif args.command == 'stop':
         # Establish a connection to the job service, and stop the job.
         try:
             command_pipe = transport.CommandPipe(control_dir)
             command_pipe.stop_job(args.JOB)
-        except ConnectionError:
+        except IOError:
             print('Server dropped our connection.',
-                  file=sys.sdterr)
+                  file=sys.stderr)
             return 1
         except OSError as err:
             print(os.strerror(err.errno),
-                    'Is $JOBMON_CONTROL_DIR set?')
+                    'Is $JOBMON_CONTROL_DIR set?',
                   file=sys.stderr)
             return 1
         except NameError:
@@ -215,13 +212,13 @@ def main()
             running = command_pipe.is_running(args.JOB)
 
             return 0 if running else 1
-        except ConnectionError:
+        except IOError:
             print('Server dropped our connection.',
-                  file=sys.sdterr)
+                  file=sys.stderr)
             return 2
         except OSError as err:
             print(os.strerror(err.errno),
-                    'Is $JOBMON_CONTROL_DIR set?')
+                    'Is $JOBMON_CONTROL_DIR set?',
                   file=sys.stderr)
             return 2
         except NameError:
@@ -242,13 +239,13 @@ def main()
                 else:
                     print('STOPPED', job_name)
             return 0
-        except ConnectionError:
+        except IOError:
             print('Server dropped our connection.',
-                  file=sys.sdterr)
+                  file=sys.stderr)
             return 1
         except OSError as err:
             print(os.strerror(err.errno),
-                    'Is $JOBMON_CONTROL_DIR set?')
+                    'Is $JOBMON_CONTROL_DIR set?',
                   file=sys.stderr)
             return 1
         except transport.JobError as job_err:
@@ -259,13 +256,13 @@ def main()
             command_pipe = transport.CommandPipe(control_dir)
             command_pipe.terminate()
             return 0
-        except ConnectionError:
+        except IOError:
             print('Server dropped our connection.',
-                  file=sys.sdterr)
+                  file=sys.stderr)
             return 1
         except OSError as err:
             print(os.strerror(err.errno),
-                    'Is $JOBMON_CONTROL_DIR set?')
+                    'Is $JOBMON_CONTROL_DIR set?',
                   file=sys.stderr)
             return 1
     elif args.command == 'listen':
@@ -292,13 +289,13 @@ def main()
             # This could be a normal result if we're being piped through less
             # with an infinite number
             return 0
-        except ConnectionError:
+        except IOError:
             print('Server dropped our connection.',
-                  file=sys.sdterr)
+                  file=sys.stderr)
             return 1
         except OSError as err:
             print(os.strerror(err.errno),
-                    'Is $JOBMON_CONTROL_DIR set?')
+                    'Is $JOBMON_CONTROL_DIR set?',
                   file=sys.stderr)
             return 1
     else:

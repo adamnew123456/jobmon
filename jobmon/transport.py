@@ -37,7 +37,10 @@ class EventStream:
     def __init__(self, socket_dir):
         socket_path = os.path.join(socket_dir, 'event')
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.sock.connect(socket_path)
+        try:
+            self.sock.connect(socket_path)
+        except FileNotFoundError:
+            raise IOError('Cannot connect to supervisor')
 
         self.fileno = self.sock.fileno()
 
@@ -88,7 +91,10 @@ class CommandPipe:
         This is necessary because the server drops us after a single request.
         """
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.sock.connect(self.socket_path)
+        try:
+            self.sock.connect(self.socket_path)
+        except FileNotFoundError:
+            raise IOError('Cannot access supervisor')
 
     def start_job(self, job_name):
         """
