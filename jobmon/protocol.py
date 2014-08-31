@@ -223,7 +223,7 @@ def recv_message(sock):
     while len(length_header) < 4:
         chunk = sock.recv(4 - len(length_header))
         if not chunk:
-            raise OSError('Peer dropped us')
+            raise IOError('Peer dropped us')
 
         length_header += chunk
     (body_length,) = struct.unpack('>I', length_header)
@@ -233,7 +233,7 @@ def recv_message(sock):
     while len(raw_json_body) < body_length:
         chunk = sock.recv(body_length - len(raw_json_body))
         if not chunk:
-            raise OSError('Peer dropped us')
+            raise IOError('Peer dropped us')
 
         raw_json_body += chunk
     json_body = raw_json_body.decode('utf-8')
