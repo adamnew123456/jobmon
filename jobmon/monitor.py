@@ -4,8 +4,17 @@ JobMon - Job Monitoring
 
 Controls and monitors child processes - this handles both starting and stopping
 subprocesses, as well as notifying the owner that the subprocesses have started
-(or stopped) via callbacks. The important class here is :class:`ChildProcess`, 
-which can handle these actions.
+(or stopped) via an event queue. An example usage of :class:`ChildProcessSkeleton`
+(which is used by the :mod:`jobmon.config`) follows::
+
+    >>> proc = ChildProcessSkeleton('echo "$MESSAGE"')
+    >>> proc.config(stdout='/tmp/hello-world',
+    ...             env={'MESSAGE': 'Hello, World'})
+    >>> proc.set_queue(THE_EVENT_QUEUE)
+
+The event queue (``THE_EVENT_QUEUE`` in the example) receives two kinds of
+events from the child process - :class:`ProcStart` indicates that a process has
+been started, while :class:`ProcStop` indicates that a process has stopped.
 """
 from collections import namedtuple
 import logging
@@ -27,8 +36,7 @@ class ChildProcess:
         Create a new :class:`ChildProcess`.
 
         :param queue.Queue event_queue: The event queue to start/stop events to.
-        :param str program: The program to run, in a format supported by  \
-        "system()".
+        :param str program: The program to run, in a format supported by ``/bin/sh``.
         :param str config: See :meth:`config` for the meaning of these options.
         """
         self.event_queue = event_queue
@@ -52,13 +60,14 @@ class ChildProcess:
 
         :param config: Various configuration options - these include:
 
-        - ``stdin`` is the name of the file to hook up to the child process's \
-        standard input.
-        - ``stdout`` is the name of the file to hook up the child process's \
-        standard output.
-        - ``stderr`` is the name of the file to hook up the child process's \
-        standard error.
-        - ``env`` is the environment to pass to the child process.
+        - ``stdin`` is the name of the file to hook up to the child process's
+          standard input.
+        - ``stdout`` is the name of the file to hook up the child process's
+          standard output.
+        - ``stderr`` is the name of the file to hook up the child process's
+          standard error.
+        - ``env`` is the environment to pass to the child process, as a
+          dictionary.
         - ``cwd`` sets the working directory of the child process.
         - ``sig`` sets the signal to send when terminating the child process.
         """
@@ -81,7 +90,7 @@ class ChildProcess:
 
     def start(self):
         """
-        Launches the subprocess, and triggering a 'process start' event.
+        Launches the subprocess.
         """
         if self.child_pid is not None:
             raise ValueError('Child process already running - cannot start another')
@@ -104,12 +113,14 @@ class ChildProcess:
                 os.dup2(stdout.fileno(), sys.stdout.fileno())
                 os.dup2(stderr.fileno(), sys.stderr.fileno())
 
+                # (This only closes the original file descriptors, not the
+                #  copied ones, so the files are not lost)
                 stdin.close()
                 stdout.close()
                 stderr.close()
 
                 # Update the child's environment with whatever variables were
-                # given to us
+                # given to us.
                 for key, value in self.env.items():
                     os.environ[key] = value
 
@@ -123,12 +134,18 @@ class ChildProcess:
                 # this process
                 os.execvp('/bin/sh', ['/bin/sh', '-c', self.program])
             finally: 
-                # Just in case we fail, we need to avoid exiting this routine
+                # Just in case we fail, we need to avoid exiting this routine.
+                # os._exit() is used here to avoid the SystemExit exception -
+                # unittest (stupidly) catches SystemExit, as raised by sys.exit(),
+                # which we need to avoid.
                 os._exit(1)
         else:
             self.child_pid = child_pid
+
             # Create a new process group, so that we don't end up killing
-            # ourselves if we kill this child
+            # ourselves if we kill this child. (For some reason, doing this
+            # didn't always work when done in the child, so it is done in the
+            # parent).
             os.setpgid(self.child_pid, self.child_pid)
 
             self.event_queue.put(ProcStart(self))
@@ -149,26 +166,32 @@ class ChildProcess:
                 # Since waitpid() is synchronous (doing it asynchronously takes
                 # a good deal more work), the waiting is done in a worker thread
                 # whose only job is to wait until the child dies, and then to
-                # notify the parent
+                # notify the parent.
+                #
+                # Although Linux pre-2.4 had issues with this (read waitpid(2)),
+                # this is fully compatible with POSIX.
                 self.logger.info('Waiting on "%s"', self.program)
                 pid, status = os.waitpid(self.child_pid, 0)
                 self.logger.info('"%s" died', self.program)
                 self.event_queue.put(ProcStop(self))
                 self.child_pid = None
 
+            # Although it might seem like a waste to spawn a thread for each
+            # running child, they don't do much work (they basically block for
+            # their whole existence).
             waiter_thread = threading.Thread(target=wait_for_subprocess)
             waiter_thread.daemon = True
             waiter_thread.start()
 
     def kill(self):
         """
-        Forcibly kills the subprocess.
+        Signals the process with whatever signal was configured.
         """
         if self.child_pid is not None:
             self.logger.info('Sending signal %d to "%s"', self.exit_signal, self.program)
 
             # Ensure all descendants of the process, not just the process itself,
-            # die
+            # die. This requires killing the process group.
             proc_group = os.getpgid(self.child_pid)
             os.killpg(proc_group, self.exit_signal)
         else:
@@ -199,6 +222,8 @@ class ChildProcessSkeleton(ChildProcess):
     def set_queue(self, event_queue):
         """
         Sets up the event queue, allowing this skeleton to be used.
+
+        :param queue.Queue event_queue: The event queue to push child events to.
         """
         self.event_queue = event_queue
 

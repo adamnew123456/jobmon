@@ -8,12 +8,24 @@ abstractions which use this low-level machinery.
 
 In general, this module is separated into two parts:
 
-- **Message definitions** define what kind of objects are sent via sockets.
+- Message definitions define what kind of objects are sent via sockets.
   These definitions (such as :class:`Event`) are self-contained, and handle
   encoding and decoding.
 - The send and receive functions use the message definitions to construct
   byte strings from message, which are sent over the network, and to decode 
   incoming byte strings into messages.
+
+In general, there are three kinds of messages that are handled via this
+protocol. These are:
+
+- Events (:class:`Event`) are one-way messages, from the supervisor to the
+  clients. They are notifications, which state that a particular job has
+  either started or stopped.
+- Commands (:class:`Command`) are messages from the client to the supervisor,
+  indicating a particular action. 
+- Responses (which can be either :class:`SuccessResponse`, 
+  :class:`FailureResponse`, :class:`StatusResponse`, :class:`JobListResponse`) 
+  indicate that success or the failure of the change.
 """
 from collections import namedtuple
 import json
@@ -186,6 +198,7 @@ class JobListResponse(namedtuple('JobListResponse', ['all_jobs'])):
             raise ValueError
         return JobListResponse(dct['all_jobs'])
 
+# Matches each type code to the class which is responsible for decoding it.
 RECV_HANDLERS = {
     MSG_EVENT: Event,
     MSG_COMMAND: Command,
@@ -195,12 +208,16 @@ RECV_HANDLERS = {
     MSG_JOB_LIST: JobListResponse,
 }
 
+# The basic protocol is a 4-byte header, indicating the length of the following
+# JSON.
+#
+# Each message has a 'type' field, which allows the decoding class to be
+# identified in RECV_HANDLERS.
+
 def send_message(message, sock):
     """
     Sends a message over a socket, transforming it into JSON first.
     """
-    # This is what one might call 'LJSON' - standard JSON with a length header.
-    # (In this case, the length header is a 32-bit wide unsigned integer).
     as_json = json.dumps(message.serialize())
     json_bytes = as_json.encode('utf-8')
 
@@ -236,7 +253,7 @@ def recv_message(sock):
             raise IOError('Peer dropped us')
 
         raw_json_body += chunk
-    json_body = raw_json_body.decode('utf-8')
 
+    json_body = raw_json_body.decode('utf-8')
     json_data = json.loads(json_body)
     return RECV_HANDLERS[json_data['type']].unserialize(json_data)

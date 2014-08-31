@@ -1,5 +1,14 @@
 """
-Launches the JobMon supervisor as a daemon.
+JobMon Launcher
+===============
+
+Launches the JobMon supervisor as a daemon - generally, the usage pattern for
+this module will be something like the following::
+
+    >>> from jobmon import config
+    >>> config_handler = config.ConfigHandler
+    >>> config_handler.load(SOME_FILE)
+    >>> run(config_handler)
 """
 import logging
 import os
@@ -16,7 +25,8 @@ def run(config_handler):
     Starts the supervisor daemon, passing to it the appropriate 
     configuration.
 
-    :param config.ConfigHandler config_handler: The configuration.
+    :param config.ConfigHandler config_handler: The configuration to run the \
+    daemon with.
     """
     supervisor = service.Supervisor(config_handler.jobs, 
                                     config_handler.control_dir)
@@ -27,12 +37,15 @@ def run(config_handler):
 class SupervisorDaemon(daemon.Daemon):
     def run(self, supervisor, config_handler):
         """
-        Runs the supervisor, making the appropriate configuration changes.
+        Runs the supervisor according to the given configuration.
 
         :param service.Supervisor supervisor: The supervisor to run.
         :param config.ConfigHandler config_handler: The configuration.
         """
-        # Deconfigure the logging setup, before we set it up
+        # Since the config module is needed to get a config to this module's
+        # run() function, config will have logged. To set up logging again, we
+        # have to get rid of the auto-configured handlers used by the logging
+        # module.
         root_handler = logging.getLogger()
         root_handler.handlers = []
 

@@ -7,9 +7,6 @@ communicate with each other. The :mod:`jobmon.protocol` module implements the
 low-level details of pushing things onto, and reading this off of, sockets.
 This is an object oriented layer on top of that low-level foundation.
 
-For Clients
-~~~~~~~~~~~
-
 - :class:`EventStream` is an asynchronous stream of events which are sent from
   the supervisor when something happens to a monitored process, such as the
   launching of a process or its termination.
@@ -47,8 +44,8 @@ class EventStream:
     def next_event(self):
         """
         Reads in a single event synchronously (i.e. this blocks) and returns it.
-        :return: The event which was read.
-        :rtype protocol.Event: The next event in the event stream.
+
+        :return: The next event in the event stream.
         """
         return protocol.recv_message(self.sock)
 
@@ -96,6 +93,7 @@ class CommandPipe:
     def start_job(self, job_name):
         """
         Launches a job by name.
+
         :param str job_name: The name of the job to launch.
         """
         self.reconnect()
@@ -116,6 +114,7 @@ class CommandPipe:
     def stop_job(self, job_name):
         """
         Terminates a job by name.
+
         :param str job_name: The name of the job to terminate.
         """
         self.reconnect()
@@ -136,6 +135,7 @@ class CommandPipe:
     def is_running(self, job_name):
         """
         Figures out whether or not a job is running.
+
         :param str job_name: The name of the job to query.
         :return: ``True`` if the job is running, ``False`` otherwise.
         """
@@ -156,6 +156,7 @@ class CommandPipe:
     def get_jobs(self):
         """
         Gets the status of every job known to the supervisor.
+
         :return: A :class:`dict` where each key is a job name and each value \
         is ``True`` if the job is running or ``False`` otherwise.
         """

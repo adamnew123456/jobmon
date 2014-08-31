@@ -12,6 +12,8 @@ are pushed into the same queue which child events are pushed into, allowing the
 supervisor to use a single input queue. In order for the supervisor to reply,
 it pushes responses onto another queue - the thread which handles output queue
 is also provided by this module.
+
+This module also pushes out queued events via sockets.
 """
 from collections import deque, namedtuple
 import logging
@@ -23,10 +25,10 @@ import threading
 
 from jobmon import protocol, transport
 
-# How long for threads to wait before checking their quit events
+# How long for threads to wait before checking their quit events, in seconds
 THREAD_TIMEOUT = 2
 
-# A message received from a socket, or a message to send to a socket
+# A message received via a socket, or a message to send via a socket
 SocketMessage = namedtuple('SocketMessage', ['message', 'socket'])
 
 class NetworkCommandQueue:
@@ -35,8 +37,11 @@ class NetworkCommandQueue:
 
     Incoming commands are read from the network, and are stored with the client
     socket into an incoming queue, which the supervisor should read from.
-    Outgoing responses to commands should be pushed into the ougoing queue,
+    Outgoing responses to commands should be pushed into the outgoing queue,
     where this thread will send the responses back out over the network.
+
+    The incoming queue is what is passed into the constructor; the outgoing
+    queue is accessible as :attr:`net_output`.
     """
     def __init__(self, socket_path, net_input_queue):
         """
@@ -45,11 +50,6 @@ class NetworkCommandQueue:
         :param str socket_path: The path to the UNIX socket on which to accept\
         connections.
         :param queue.Queue net_input_queue: The queue to send network messages.
-
-        Note that there is an additional queue, :attr:`net_output`, which is
-        where network responses are read from. Note that both the input queue,
-        and the output queue, deal only in terms of :class:`SocketMessage`
-        objects.
         """
         self.sock_path = socket_path
         self.net_input = net_input_queue
@@ -149,13 +149,16 @@ class UndoableQueue(queue.Queue):
     """
     A queue which can have elements put back onto the front if they are not
     processed.
+
+    The special method is :meth:`UndoableQueue.unget` which allows you to put
+    elements back onto the head of the queue.
     """
-    def __init__(self, maxsize=0, max_backlog=0):
+    def __init__(self, maxsize=0, max_backlog=1024):
         """
         Create a new :class:`UndoableQueue`.
 
         :param int maxsize: The maximum size of the queue, *not* including \
-        the backlog.
+        the backlog, or 0 for an unlimited size.
         :param int max_backlog: The maximum size of the backlog, or 0 for an \
         unlimited size.
         """
@@ -202,18 +205,23 @@ class UndoableQueue(queue.Queue):
         return super().get(block, timeout)
 
 class NetworkEventQueue:
+    """
+    Handles dispatching events over the network.
+
+    Incoming events should be sent to a queue (named :attr:`event_output`)
+    which are then sent out to connected clients. Note that this event queue
+    pumps events lazily - if no clients are not connected, then events are kept
+    until a maximum number of events.
+
+    If you want to wait for the server to set up its socket, then wait on
+    :attr:`server_listening`. This is useful primarily for testing.
+    """
     def __init__(self, socket_path):
         """
         Creates a new :class:`NetworkEventQueue`.
 
         :param str socket_path: The path to the UNIX socket on which to accept\
         connections.
-
-        Note that there is an additional queue, :attr:`event_output`, which is
-        where events should be sent to get them forwarded onto the network.
-
-        If you want to wait for the server to set up its socket, then wait on
-        :attr:`server_listening`.
         """
         self.sock_path = socket_path
         self.event_output = UndoableQueue()

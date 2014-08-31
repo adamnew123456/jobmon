@@ -1,6 +1,10 @@
 """
+JobMon Service
+==============
+
 Handles the supervisor role, by accepting requests over the network and
-managing children.
+managing children. This is not meant to be run standalone - see 
+:mod:`jobmon.launcher` for how this module is meant to be used.
 """
 import logging
 import os
@@ -9,6 +13,12 @@ import queue
 from jobmon import monitor, netqueue, protocol
 
 class Supervisor:
+    """
+    This contains the state necessary to manage a herd of jobs. This handles
+    incoming commands, and dispatches events from child processes - these are
+    handled in conjunction with :mod:`jobmon.netqueue`, so the functioning
+    core of this class is relatively small.
+    """
     def __init__(self, jobs, control_path):
         """
         Creates a new :class:`Supervisor`.

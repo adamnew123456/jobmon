@@ -1,5 +1,17 @@
 """
-Reads in the configuration file, storing all the configured settings and jobs.
+JobMon Configuration Handling
+=============================
+
+Implements configuration file reading and validation, which includes:
+
+- Configuration options for the supervisor itself.
+- Configuration options for individual jobs.
+- The ability to load jobs from multiple files.
+
+Typically, the use for this module is simply::
+
+    >>> config_handler = ConfigHandler()
+    >>> config_handler.load(SOME_FILE)
 """
 import glob
 import json
@@ -7,6 +19,9 @@ import logging
 import signal
 
 from jobmon import monitor
+
+# Get the names for both signals and log levels so that way the configuration
+# file authors do not have to reference those constants numerically.
 
 SIGNAL_NAMES = {
     sig_name: getattr(signal, sig_name) for sig_name in dir(signal)
@@ -24,6 +39,19 @@ LOG_LEVELS = {
 }
 
 class ConfigHandler:
+    """
+    Reads, stores, and validates configuration options.
+
+    - :attr:`jobs` maps each job name to a 
+      :class:`jobmon.monitor.ChlidProcesSkeleton`.
+    - :attr:`working_dir` stores the supervisor's working directory.
+    - :attr:`control_dir` stores the path where the supervisor will put its
+      command sockets.
+    - :attr:`log_level` stores the logging level for the supervisor's logging
+      output.
+    - :attr:`log_file` stores the path where the supervisor's logging output
+      will be written.
+    """
     def __init__(self):
         self.jobs = {}
         self.logger = logging.getLogger('config')
@@ -57,6 +85,8 @@ class ConfigHandler:
         """
         Loads the main jobs file, extracting information from both the main
         configuration file and any included jobs files.
+
+        :param str config_file: The path to the configuration file to load.
         """
         self.logger.info('Loading main configuration file "%s"', config_file)
         with open(config_file) as config:

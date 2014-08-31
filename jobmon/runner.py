@@ -1,5 +1,10 @@
 """
+JobMon Runner
+=============
+
 The entry point to the command line utilities for managing JobMon instances.
+This module is meant to be used by setuptools to generate entry points for
+console scripts.
 """
 import argparse
 import logging
