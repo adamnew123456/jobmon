@@ -79,7 +79,7 @@ queries (this environment variable is required for all other commands).''')
         help='The path to the configuration file')
 
     start_parser = command_arg.add_parser('start',
-        help='Starts a job (requires $JOBMON_CONTROL_DIR)')
+        help='Starts a job')
     start_parser.add_argument('JOB',
         help='The name of the job to start')
 
