@@ -22,6 +22,7 @@ import queue
 import select
 import socket
 import threading
+import time
 
 from jobmon import protocol, transport
 
@@ -275,8 +276,14 @@ class NetworkEventQueue:
                     if not self.connections:
                         self.logger.info('Keeping event in the queue, no listeners')
                         self.event_output.unget(event)
+
+                        # To avoid spamming the logs and using up too much
+                        # processor time, sleep since we know that the next
+                        # .get() request on the event_output queue will not block
+                        time.sleep(THREAD_TIMEOUT)
                     else:
-                        self.logger.info('Pushing out event to %d listeners', len(self.connections))
+                        self.logger.info('Pushing out event to %d listeners', 
+                                         len(self.connections))
                         for peer in self.connections:
                             try:
                                 protocol.send_message(event, peer)
