@@ -16,7 +16,9 @@ Typically, the use for this module is simply::
 import glob
 import json
 import logging
+import os
 import signal
+import string
 
 from jobmon import monitor
 
@@ -37,6 +39,16 @@ LOG_LEVELS = {
     for log_level in ('CRITICAL', 'DEBUG', 'ERROR', 'FATAL', 'INFO', 'WARN',
                       'WARNING')
 }
+
+def expand_path_vars(path):
+    """
+    Expands a path variable which uses $-style substitutions.
+
+    :func:`os.path.expandvars` doesn't have any way to escape the substitutions
+    unlike :class:`string.Template`, so we have to do the substitutions manually.
+    """
+    template = string.Template(path)
+    return template.safe_substitute(os.environ)
 
 class ConfigHandler:
     """
@@ -115,19 +127,22 @@ class ConfigHandler:
         :param dict supervisor_map: A dictionary of options.
         """
         if 'working-dir' in supervisor_map:
-            self.working_dir = self.read_type(supervisor_map, 'working-dir', str, 
-                                              self.working_dir)
+            self.working_dir = expand_path_vars(
+                    self.read_type(supervisor_map, 'working-dir', str, 
+                                   self.working_dir))
 
         if 'control-dir' in supervisor_map:
-            self.control_dir = self.read_type(supervisor_map, 'control-dir', str, 
-                                              self.control_dir)
+            self.control_dir = expand_path_vars(
+                    self.read_type(supervisor_map, 'control-dir', str, 
+                                   self.control_dir))
 
         if 'include-dirs' in supervisor_map:
-            self.includes = self.read_type(supervisor_map, 'include-dirs', list,
-                                           self.includes)
+            self.includes = self.read_type(supervisor_map, 'include-dirs', 
+                                           list, self.includes)
 
         if 'log-level' in supervisor_map:
-            log_level_name = self.read_type(supervisor_map, 'log-level', str, None)
+            log_level_name = self.read_type(supervisor_map, 'log-level', str,
+                    None)
             if log_level_name is not None:
                 log_level_name = log_level_name.upper()
                 if log_level_name in LOG_LEVELS:
@@ -136,14 +151,16 @@ class ConfigHandler:
                     self.logger.warning('%s is not a valid self.logger.level', log_level_name)
 
         if 'log-file' in supervisor_map:
-            self.log_file = self.read_type(supervisor_map, 'log-file', str, 
-                                           self.log_file)
+            self.log_file = expand_path_vars(
+                    self.read_type(supervisor_map, 'log-file', str, 
+                                   self.log_file))
 
         included_jobfiles = []
         for include_glob in self.includes:
             included_jobfiles += glob.glob(include_glob)
 
         for filename in included_jobfiles:
+            filename = expand_path_vars(filename)
             try:
                 self.logger.info('Loading job file "%s"', filename)
                 with open(filename) as jobfile:
@@ -177,19 +194,23 @@ class ConfigHandler:
 
             if 'stdin' in job:
                 default_value = process.stdin
-                process.config(stdin=self.read_type(job, 'stdin', str, default_value))
+                process.config(stdin=expand_config_vars(
+                            self.read_type(job, 'stdin', str, default_value)))
             if 'stdout' in job:
                 default_value = process.stdout
-                process.config(stdout=self.read_type(job, 'stdout', str, default_value))
+                process.config(stdout=expand_path_vars(
+                        self.read_type(job, 'stdout', str, default_value)))
             if 'stderr' in job:
                 default_value = process.stderr
-                process.config(stderr=self.read_type(job, 'stderr', str, default_value))
+                process.config(stderr=expand_path_vars(
+                        self.read_type(job, 'stderr', str, default_value)))
             if 'env' in job:
                 default_value = process.env
                 process.config(env=self.read_type(job, 'env', dict, default_value))
             if 'cwd' in job:
                 default_value = process.working_dir
-                process.config(cwd=self.read_type(job, 'cwd', str, default_value))
+                process.config(cwd=expand_path_vars(
+                            self.read_type(job, 'cwd', str, default_value)))
             if 'signal' in job:
                 default_value = process.exit_signal
                 sig_name = self.read_type(job, 'signal', str, default_value)

@@ -2,7 +2,7 @@
     "supervisor": 
     {
         "working-dir": ".",
-        "control-dir": "/tmp/supervisor",
+        "control-dir": "$TMP/supervisor",
         "include-dirs": [
             "test-jobs/*.json"
         ],
