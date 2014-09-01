@@ -15,10 +15,7 @@ class ConfigHandlerTest(unittest.TestCase):
         Loads the configuration file, and ensures that all jobs are included.
         """
         # Load the configuration from the master file, which will include all
-        # the jobs we test for. Note that because the control-dir option uses
-        # $TMP to test environment variables, we have to set that environment
-        # variable.
-        os.environ['TMP'] = '/tmp'
+        # the jobs we test for.
         configuration = config.ConfigHandler()
         configuration.load('jobfile.json')
 
