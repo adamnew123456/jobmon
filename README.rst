@@ -10,11 +10,11 @@ JobMon is a job monitoring system, which is capable of:
 - Configuring the environment that child processes run it. Currently, this
   is a useful but small list of things that can be configured. These include:
 
- - Telling the child processes what files it should hook its standard IO
-   streams up to.
- - Setting up environment variables for the child process.
- - Setting the working directory of the child process.
- - What signal is sent to the child process to kill it.
+  - Telling the child processes what files it should hook its standard IO
+    streams up to.
+  - Setting up environment variables for the child process.
+  - Setting the working directory of the child process.
+  - What signal is sent to the child process to kill it.
 
 - Handling commands, and sending responses, over UNIX sockets. The protocol
   (which uses JSON) is covered later in this document.
@@ -82,15 +82,15 @@ Each part of the supervisor configuration is described below:
   constants are used in this field (note that this field is 
   *case-insensitive*):
 
- - ``DEBUG`` prints out the most messages, and is really only useful for
-   development.
- - ``INFO`` prints out messages which are generally not of interest outside 
-   of development (although fewer are printed than when ``DEBUG`` is used).
- - ``WARN`` (also, ``WARNING``) print out messages which indicate some kind
-   of error in a configuration file or the code which, while not fatal, is
-   generally worth paying attention to. This is the default logging level.
- - ``ERROR`` prints out serious error messages.
- - ``CRITICAL`` prints out messages which are extremely important.
+  - ``DEBUG`` prints out the most messages, and is really only useful for
+    development.
+  - ``INFO`` prints out messages which are generally not of interest outside 
+    of development (although fewer are printed than when ``DEBUG`` is used).
+  - ``WARN`` (also, ``WARNING``) print out messages which indicate some kind
+    of error in a configuration file or the code which, while not fatal, is
+    generally worth paying attention to. This is the default logging level.
+  - ``ERROR`` prints out serious error messages.
+  - ``CRITICAL`` prints out messages which are extremely important.
 
 Note that ``working-dir``, ``control-dir``, ``include-dirs`` and ``log-file``
 will expand shell variables using the traditional ``$NAME`` syntax. Note
