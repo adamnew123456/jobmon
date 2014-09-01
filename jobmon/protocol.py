@@ -63,6 +63,17 @@ def reason_to_str(reason):
     return _REASON_STR_TABLE.get(reason, 'Unknown reason {}'.format(reason))
 
 class Event(namedtuple('Event', ['job_name', 'event_code'])):
+    EVENT_NAMES = {
+        EVENT_STARTJOB: 'Started',
+        EVENT_STOPJOB: 'Stopped'
+    }
+
+    def __str__(self):
+        return 'Event[{}: {}]'.format(self.EVENT_NAMES[self.event_code],
+                                      self.job_name)
+
+    __repr__ =  __str__
+
     def serialize(self):
         """
         :return: A :class:`dict` representation of this event.
@@ -86,6 +97,21 @@ class Event(namedtuple('Event', ['job_name', 'event_code'])):
         return Event(dct['job'], int(dct['event']))
 
 class Command(namedtuple('Command', ['job_name', 'command_code'])):
+    COMMAND_NAMES = {
+        CMD_START: 'Start job',
+        CMD_STOP: 'Stop job',
+        CMD_STATUS: 'Query job status',
+        CMD_JOB_LIST: 'List all jobs',
+        CMD_QUIT: 'Terminate the supervisor'
+    }
+
+    def __str__(self):
+        return 'Command[{}: {}]'.format(
+                self.COMMAND_NAMES[self.command_code],
+                self.job_name)
+
+    __repr__ =  __str__
+
     def serialize(self):
         """
         :return: A :class:`dict` representation of this event.
@@ -109,6 +135,11 @@ class Command(namedtuple('Command', ['job_name', 'command_code'])):
         return Command(dct['job'], int(dct['command']))
 
 class SuccessResponse(namedtuple('SuccessResponse', ['job_name'])): 
+    def __str__(self):
+        return 'Success'
+
+    __repr__ =  __str__
+
     def serialize(self):
         """
         :return: A :class:`dict` representation of this event.
@@ -131,6 +162,12 @@ class SuccessResponse(namedtuple('SuccessResponse', ['job_name'])):
         return SuccessResponse(dct['job'])
 
 class FailureResponse(namedtuple('FailureResponse', ['job_name', 'reason'])):
+    def __str__(self):
+        return 'Failure[{}: {}]'.format(reason_to_str(reason),
+                                        self.job_name)
+
+    __repr__ =  __str__
+
     def serialize(self):
         """
         :return: A :class:`dict` representation of this event.
@@ -154,6 +191,14 @@ class FailureResponse(namedtuple('FailureResponse', ['job_name', 'reason'])):
         return FailureResponse(dct['job'], dct['reason'])
 
 class StatusResponse(namedtuple('StatusResponse', ['job_name', 'is_running'])):
+    def __str__(self):
+        if self.is_running:
+            return 'Status[{} is RUNNING]'.format(self.job_name)
+        else:
+            return 'Status[{} is STOPPED]'.format(self.job_name)
+
+    __repr__ = __str__
+
     def serialize(self):
         """
         :return: A :class:`dict` representation of this event.
@@ -177,6 +222,16 @@ class StatusResponse(namedtuple('StatusResponse', ['job_name', 'is_running'])):
         return StatusResponse(dct['job'], dct['is_running'])
 
 class JobListResponse(namedtuple('JobListResponse', ['all_jobs'])):
+    def __str__(self):
+        buffer = 'JobList'
+        for job_name, job_status in self.all_jobs.items():
+            if job_status:
+                buffer += '\n - {} is RUNNING'.format(job_name)
+            else:
+                buffer += '\n - {} is STOPPED'.format(job_name)
+
+    __repr__ = __str__
+
     def serialize(self):
         """
         :return: A :class:`dict` representation of this event.
