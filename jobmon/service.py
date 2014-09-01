@@ -63,6 +63,7 @@ class Supervisor:
 
         if command.command_code == protocol.CMD_START:
             # Try to start the given job
+            self.logger.info('Received start message for %s', command.job_name)
             if self.ensure_job_exists(command.job_name, sock):
                 the_job = self.jobs[command.job_name]
                 if the_job.get_status():
@@ -78,6 +79,7 @@ class Supervisor:
                         sock))
         elif command.command_code == protocol.CMD_STOP:
             # Try to stop the given job
+            self.logger.info('Received stop message for %s', command.job_name)
             if self.ensure_job_exists(command.job_name, sock):
                 the_job = self.jobs[command.job_name]
                 if not the_job.get_status():
@@ -94,6 +96,7 @@ class Supervisor:
         elif command.command_code == protocol.CMD_STATUS:
             # Report of the given job, where the status is True if it is
             # running or False otherwise
+            self.logger.info('Received status message for %s', command.job_name)
             if self.ensure_job_exists(command.job_name, sock):
                 job_status = self.jobs[command.job_name].get_status()
                 self.reply_queue.put(netqueue.SocketMessage(
@@ -101,6 +104,7 @@ class Supervisor:
                         job_status),
                     sock))
         elif command.command_code == protocol.CMD_JOB_LIST:
+            self.logger.info('Received job list command')
             status_table = {
                 job_name: self.jobs[job_name].get_status()
                 for job_name in self.jobs
@@ -109,8 +113,10 @@ class Supervisor:
                 protocol.JobListResponse(status_table),
                 sock))
         elif command.command_code == protocol.CMD_QUIT:
+            self.logger.info('Received terminate command')
             for job in self.jobs.values():
                 if job.get_status():
+                    self.logger.info('Terminating job %s', job.program)
                     job.kill()
 
             self.is_done = True
@@ -123,7 +129,7 @@ class Supervisor:
         command_sock = os.path.join(self.control_path, 'command')
         event_sock = os.path.join(self.control_path, 'event')
         if os.path.exists(command_sock) or os.path.exists(event_sock):
-            logging.error('Another instance running out of %s - bailing',
+            self.logger.error('Another instance running out of %s - bailing',
                           self.control_path)
             os._exit(1)
 
