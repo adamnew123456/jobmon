@@ -160,6 +160,20 @@ error, it returns a *negative* status code; if the job that it queries is
 running, the it returns a 0, while if the job it queries is stopped, it
 returns a positive status code.
 
+``jobmon list-jobs`` and ``jobmon listen`` share a common output format. For
+example, consider a JobMon instance with two jobs, *Job A* which is running and
+*Job B* which is stopped. ``jobmon list-jobs`` should print::
+
+    RUNNING Job A
+    STOPPED Job B
+
+Let's say that *Job A* was started, then *Job B* was started, and then *Job B*
+stopped. ``jobmon listen`` might produce the following event stream::
+
+    RUNNING Job A
+    RUNNNIG Job B
+    STOPPED Job B
+
 Installation
 ------------
 
