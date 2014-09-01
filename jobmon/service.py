@@ -164,6 +164,10 @@ class Supervisor:
                 self.event_dispatch_queue.put(
                     protocol.Event(job_name, protocol.EVENT_STOPJOB))
 
+            # Avoid waiting for the next event if we're ready to quit now
+            if self.is_done:
+                break
+
         net_commands.stop()
         net_events.stop()
     
