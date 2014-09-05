@@ -107,17 +107,23 @@ When using a jobs file (that is included by the master), the top-level
 "jobs" can be elided. A sample jobs file follows::
 
     {
-        "command": "/bin/true",
-        "stdin": "$DEVNULL",
-        "stdout": "$DEVNULL",
-        "stderr": "$DEVNULL",
-        "env": {
-            "HOME": "/home/bob",
-        },
-        "cwd": "/home/bob",
-        "signal": "SIGSTOP"
+        "true-job":
+        {
+            "command": "/bin/true",
+            "stdin": "$DEVNULL",
+            "stdout": "$DEVNULL",
+            "stderr": "$DEVNULL",
+            "env": {
+                "HOME": "/home/bob",
+            },
+            "cwd": "/home/bob",
+            "signal": "SIGSTOP"
+        }
     }
 
+- ``"true-job"`` is the name of the job. These names can include any character,
+  but must be globally unique (that is, neither the master nor any other files
+  included by the master can use this same name).
 - The ``command`` option (which is *mandatory*) indicates the command to
   launch. Note that this command can use syntax supported by ``/bin/sh``.
 - ``stdin``, ``stdout``, and ``stderr`` give a filename which is hooked up to
