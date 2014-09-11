@@ -30,6 +30,7 @@ protocol. These are:
 from collections import namedtuple
 import json
 import os
+import select
 import socket
 import struct
 
@@ -285,29 +286,32 @@ def send_message(message, sock):
         sent_length = sock.send(unsent)
         unsent = unsent[sent_length:]
 
+def nonblocking_recv(sock, size):
+    """
+    A non-blocking version of socket.recv() which avoids EAGAIN.
+    """
+    buffer = b''
+    while len(buffer) < size:
+        # This avoids EAGAIN by waiting until there is actually data
+        select.select([sock], [], [])
+        chunk = sock.recv(size - len(buffer))
+        if not chunk:
+            raise IOError('Peer dropped us')
+
+        buffer += chunk
+    return buffer
+
 def recv_message(sock):
     """
     Reads a dictionary from a socket.
     """
     # First, read the 4-byte length header to know how long the body content
     # should be.
-    length_header = sock.recv(4)
-    while len(length_header) < 4:
-        chunk = sock.recv(4 - len(length_header))
-        if not chunk:
-            raise IOError('Peer dropped us')
-
-        length_header += chunk
+    length_header = nonblocking_recv(sock, 4)
     (body_length,) = struct.unpack('>I', length_header)
 
     # Read in and decode the raw JSON into UTF-8
-    raw_json_body = b''
-    while len(raw_json_body) < body_length:
-        chunk = sock.recv(body_length - len(raw_json_body))
-        if not chunk:
-            raise IOError('Peer dropped us')
-
-        raw_json_body += chunk
+    raw_json_body = nonblocking_recv(sock, body_length)
 
     json_body = raw_json_body.decode('utf-8')
     json_data = json.loads(json_body)
