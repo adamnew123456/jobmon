@@ -157,10 +157,13 @@ class ConfigHandler:
 
         included_jobfiles = []
         for include_glob in self.includes:
-            included_jobfiles += glob.glob(include_glob)
+            self.logger.info('Expanding glob "%s"', include_glob)
+            globs = glob.glob(expand_path_vars(include_glob))
+            included_jobfiles += globs
+            for filename in globs:
+                self.logger.info('- Got file "%s"', filename)
 
         for filename in included_jobfiles:
-            filename = expand_path_vars(filename)
             try:
                 self.logger.info('Loading job file "%s"', filename)
                 with open(filename) as jobfile:
