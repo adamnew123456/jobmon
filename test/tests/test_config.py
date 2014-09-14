@@ -23,6 +23,7 @@ class ConfigHandlerTest(unittest.TestCase):
         self.assertEqual(configuration.control_dir, '/tmp/supervisor')
         self.assertEqual(configuration.log_level, logging.DEBUG)
         self.assertEqual(configuration.log_file, 'jobmon-test-output.log')
+        self.assertEqual(configuration.autostarts, ['exit-on-signal'])
 
         # For the first test, ensure all the defaults are kept for values that
         # are unspecified

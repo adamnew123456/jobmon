@@ -15,6 +15,10 @@ class ClientItegrationTest(unittest.TestCase):
         self.config_handler = config.ConfigHandler()
         self.config_handler.load('jobfile.json')
 
+        # Since one of these jobs has autostart enabled for testing purposes,
+        # and we don't want to run it here, just clear the autostart list.
+        self.config_handler.autostarts = []
+
     def setUp(self):
         # Connect to the supervisor. This comes in two parts - on one hand, the
         # supervisor has an event-dispatching system which will tell us when jobs have

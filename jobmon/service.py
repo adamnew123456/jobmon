@@ -19,17 +19,19 @@ class Supervisor:
     handled in conjunction with :mod:`jobmon.netqueue`, so the functioning
     core of this class is relatively small.
     """
-    def __init__(self, jobs, control_path):
+    def __init__(self, jobs, control_path, autostarts):
         """
         Creates a new :class:`Supervisor`.
 
         :param dict jobs: All the jobs, indexed by name, stored as \
         :class:`jobmon.monitor.ChildProcessSkeleton` objects.
         :param str control_path: Where to store the control sockets.
+        :param list autostarts: Which jobs should be started immediately.
         """
         self.jobs = jobs
         self.job_names = {job: job_name for job_name, job in jobs.items()}
         self.control_path = control_path
+        self.autostarts = autostarts
         self.is_done = False
 
         # These are assigned when run, but put up here for reference
@@ -149,6 +151,13 @@ class Supervisor:
         net_events = netqueue.NetworkEventQueue(event_sock)
         self.event_dispatch_queue = net_events.event_output
         net_events.start()
+
+        # Autostart all the jobs before any others come in
+        self.logger.info('Autostarting jos')
+        for job in self.autostarts:
+            self.logger.info(' - %s', job)
+            the_job = self.jobs[job]
+            the_job.start()
 
         # Process each event as it comes in, dispatching to the appropriate
         # handler depending upon what type of event it is

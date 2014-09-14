@@ -116,8 +116,9 @@ When using a jobs file (that is included by the master), the top-level
             "env": {
                 "HOME": "/home/bob",
             },
-            "cwd": "/home/bob",
-            "signal": "SIGSTOP"
+            "working-dir": "/home/bob",
+            "signal": "SIGSTOP",
+            "autostart": false
         }
     }
 
@@ -133,13 +134,16 @@ When using a jobs file (that is included by the master), the top-level
   child process, and their values. Note that all of the daemon's environment
   variables are passed in as well, in addition to these variables, but the
   variables in the configuration file take precedence.
-- ``cwd`` sets the working directory of the child - the default is ``.``
+- ``working-dir`` sets the working directory of the child - the default is ``.``
 - ``signal`` sets the signal that is sent to the child process when it is
   stopped. The values allowed in this (case-insensitive) field can be found
   by running ``kill -l`` on your system - however, the preceding ``SIG`` is
   *required*. The default signal is ``SIGTERM``.
+- ``autostart`` dictates whether or not the job should be started
+  automatically by the daemon (the default is that the job is *not* started
+  automatically).
 
-Note that the ``stdin``, ``stdout``, ``stderr``, and ``cwd`` fields do
+Note that the ``stdin``, ``stdout``, ``stderr``, and ``working-dir`` fields do
 environment substitution in the same way as in the supervisor configuration
 discussed above.
 

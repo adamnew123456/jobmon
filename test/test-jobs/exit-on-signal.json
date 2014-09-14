@@ -3,6 +3,7 @@
     {
         "command": "test-jobs/exit-on-signal",
         "stdout": "/tmp/signal-test",
-        "signal": "SIGUSR1"
+        "signal": "SIGUSR1",
+        "autostart": true
     }
 }

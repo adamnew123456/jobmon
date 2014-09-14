@@ -29,7 +29,8 @@ def run(config_handler):
     daemon with.
     """
     supervisor = service.Supervisor(config_handler.jobs, 
-                                    config_handler.control_dir)
+                                    config_handler.control_dir,
+                                    config_handler.autostarts)
 
     supervisor_wrapper = SupervisorDaemon(home_dir=config_handler.working_dir)
     supervisor_wrapper.start(supervisor, config_handler)

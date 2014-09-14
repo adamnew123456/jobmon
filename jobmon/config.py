@@ -63,6 +63,7 @@ class ConfigHandler:
       output.
     - :attr:`log_file` stores the path where the supervisor's logging output
       will be written.
+    - :attr:`autostarts` stores a list of jobs to start immediately.
     """
     def __init__(self):
         self.jobs = {}
@@ -73,6 +74,7 @@ class ConfigHandler:
         self.includes = []
         self.log_level = logging.WARNING
         self.log_file = '/dev/null'
+        self.autostarts = []
 
     def read_type(self, dct, key, expected_type, default=None):
         """
@@ -210,10 +212,10 @@ class ConfigHandler:
             if 'env' in job:
                 default_value = process.env
                 process.config(env=self.read_type(job, 'env', dict, default_value))
-            if 'cwd' in job:
+            if 'working-dir' in job:
                 default_value = process.working_dir
                 process.config(cwd=expand_path_vars(
-                            self.read_type(job, 'cwd', str, default_value)))
+                            self.read_type(job, 'working-dir', str, default_value)))
             if 'signal' in job:
                 default_value = process.exit_signal
                 sig_name = self.read_type(job, 'signal', str, default_value)
@@ -222,5 +224,10 @@ class ConfigHandler:
                     self.logger.warning('%s it not a valid signal name', sig_name)
                 else:
                     process.config(sig=SIGNAL_NAMES[sig_name])
+
+            if 'autostart' in job:
+                should_autostart = self.read_type(job, 'autostart', bool, False)
+                if should_autostart:
+                    self.autostarts.append(job_name)
 
             self.jobs[job_name] = process
