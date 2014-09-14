@@ -7,7 +7,7 @@ managing children. This is not meant to be run standalone - see
 :mod:`jobmon.launcher` for how this module is meant to be used.
 """
 import logging
-import os
+import os, os.path
 import queue
 
 from jobmon import monitor, netqueue, protocol
@@ -40,6 +40,10 @@ class Supervisor:
         self.event_dispatch_queue = None
 
         self.logger = logging.getLogger('supervisor.main')
+
+        # Automatically create the control path ourselves
+        if not os.path.isdir(self.control_path):
+            os.makedirs(self.control_path)
 
     def ensure_job_exists(self, job_name, sock):
         """
