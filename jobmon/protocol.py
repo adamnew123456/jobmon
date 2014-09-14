@@ -290,10 +290,15 @@ def nonblocking_recv(sock, size):
     """
     A non-blocking version of socket.recv() which avoids EAGAIN.
     """
+    # Note that select fails in the unit tests since the mocks don't actually
+    # have file numbers. As a result, just avoid select() if we can't use it.
+    can_select = hasattr(sock, 'fileno')
+
     buffer = b''
     while len(buffer) < size:
-        # This avoids EAGAIN by waiting until there is actually data
-        select.select([sock], [], [])
+        # This avoids EAGAIN by waiting until there is actually data. 
+        if can_select:
+            select.select([sock], [], [])
         chunk = sock.recv(size - len(buffer))
         if not chunk:
             raise IOError('Peer dropped us')
