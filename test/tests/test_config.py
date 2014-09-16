@@ -35,13 +35,11 @@ class ConfigHandlerTest(unittest.TestCase):
         self.assertEqual(signal_test_job.env, {})
         self.assertEqual(signal_test_job.working_dir, None)
         self.assertEqual(signal_test_job.exit_signal, signal.SIGUSR1)
-        self.assertEqual(signal_test_job.restart, False)
 
         # For the rest, just test what was changed
         log_stdout_job = configuration.jobs['log-stdout']
         self.assertEqual(log_stdout_job.program, 'test-jobs/say-yes-100-times-to-stdout')
         self.assertEqual(log_stdout_job.stdout, '/tmp/yes-100-stdout')
-        self.assertEqual(signal_test_job.restart, False)
 
         log_stderr_job = configuration.jobs['log-stderr']
         self.assertEqual(log_stderr_job.program, 'test-jobs/say-yes-100-times-to-stderr')
@@ -54,7 +52,3 @@ class ConfigHandlerTest(unittest.TestCase):
         self.assertEqual(env_values_job.program, 'test-jobs/test-env-values')
         self.assertEqual(env_values_job.stdout, '/tmp/env-test')
         self.assertEqual(env_values_job.env, {'A': 'a', 'B': 'b'})
-
-        exit_immediately_job = configuration.jobs['exit-immediately']
-        self.assertEqual(exit_immediately_job.program, 'test-jobs/exit-immediately')
-        self.assertEqual(exit_immediately_job.restart, True)

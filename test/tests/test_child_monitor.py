@@ -9,7 +9,6 @@ import tempfile
 import time
 import unittest
 
-from tests import fakes
 from jobmon import monitor
 
 class ChildMonitorTester(unittest.TestCase):
@@ -23,8 +22,7 @@ class ChildMonitorTester(unittest.TestCase):
         """
         # We're going to use the program 'sleep' so that we have time to do what
         # we need to do
-        sleeper = monitor.ChildProcess('test_start_process', None, self.events, 
-                                       'sleep 10')
+        sleeper = monitor.ChildProcess(self.events, 'sleep 10')
 
         # First, start up the child and ensure that it is running - both by querying it, and
         # reading an event
@@ -58,7 +56,7 @@ class ChildMonitorTester(unittest.TestCase):
         """
         Starts a process, and then kills it.
         """
-        sleeper = monitor.ChildProcess('test_kill_process', None, self.events, 'sleep 10')
+        sleeper = monitor.ChildProcess(self.events, 'sleep 10')
 
         # Launch the process, then wait a bit and kill it. It should take way
         # less than 10s to do this
@@ -81,8 +79,7 @@ class ChildMonitorTester(unittest.TestCase):
         stdout_name = tempfile.mktemp(prefix='jobmon', suffix='stdout')
 
         # Launch the child and wait for it to exit
-        printer = monitor.ChildProcess('test_child_stdout', None, self.events, 
-                                       'echo "Yes"',
+        printer = monitor.ChildProcess(self.events, 'echo "Yes"',
                                        stdout=stdout_name)
         printer.start()
         self.assertEqual(self.events.get(), monitor.ProcStart(printer))
@@ -100,8 +97,7 @@ class ChildMonitorTester(unittest.TestCase):
         """
         stderr_name = tempfile.mktemp(prefix='jobmon', suffix='stderr')
 
-        printer = monitor.ChildProcess('test_child_stderr', None, self.events, 
-                                       'echo "Yes" >&2',
+        printer = monitor.ChildProcess(self.events, 'echo "Yes" >&2',
                                        stderr=stderr_name)
         printer.start()
         self.assertEqual(self.events.get(), monitor.ProcStart(printer))
@@ -123,8 +119,7 @@ class ChildMonitorTester(unittest.TestCase):
         with open(stdin_name, 'w') as in_file:
             in_file.write('Cake day\n')
 
-        catter = monitor.ChildProcess('test_child_stdin', None, self.events, 
-                                      'cat',
+        catter = monitor.ChildProcess(self.events, 'cat',
                                       stdin=stdin_name, stdout=stdout_name)
         catter.start()
         self.assertEqual(self.events.get(), monitor.ProcStart(catter))
@@ -143,7 +138,7 @@ class ChildMonitorTester(unittest.TestCase):
         """
         stdout_name = tempfile.mktemp(prefix='jobmon', suffix='stdout')
 
-        env_lister = monitor.ChildProcess('test_child_env', None, self.events, 'env',
+        env_lister = monitor.ChildProcess(self.events, 'env',
                                           stdout=stdout_name,
                                           env={'cake': 'lie'})
         env_lister.start()
@@ -164,8 +159,7 @@ class ChildMonitorTester(unittest.TestCase):
         """
         stdout_name = tempfile.mktemp(prefix='jobmon', suffix='stdout')
 
-        pwd_lister = monitor.ChildProcess('test_child_cwd', None, self.events, 
-                                          'pwd',
+        pwd_lister = monitor.ChildProcess(self.events, 'pwd',
                                           stdout=stdout_name,
                                           cwd='/tmp')
         pwd_lister.start()
@@ -189,7 +183,7 @@ class ChildMonitorTester(unittest.TestCase):
         # it gets it, writing some output so we can verify it worked. The sleep
         # has to be run in the background so that way the shell can handle the
         # signal sent to it - otherwise, the trap is ignored.
-        sleeper = monitor.ChildProcess('test_child_sig', None, self.events, 
+        sleeper = monitor.ChildProcess(self.events, 
 '''
 on_usr_1() {
     echo Done
@@ -218,53 +212,3 @@ wait
             self.assertEqual(content, 'Done\n')
 
         os.remove(stdout_name)
-
-    def test_restart(self):
-        """
-        Ensures that the restart functionality is functioning properly.
-        """
-        # Since jobs cannot restart themselves (an architectural limitation),
-        # we need an intermediary
-        fake_service = fakes.FakeService()
-        fake_service.start()
-
-        try:
-            exit_tester = monitor.ChildProcess('test_restart', 
-                                               fake_service.command_queue, 
-                                               self.events,
-'''
-sleep 2
-exit
-''',
-                                               restart=True)
-
-            # Wait for the process to restart at least 5 times
-            exit_tester.start()
-            self.assertEqual(self.events.get(), monitor.ProcStart(exit_tester))
-
-            for x in range(5):
-                self.assertEqual(self.events.get(), monitor.ProcStop(exit_tester))
-                self.assertEqual(self.events.get(), monitor.ProcStart(exit_tester))
-
-            # Now, kill the process and ensure it doesn't revive itself.
-            exit_tester.kill()
-            self.assertEqual(self.events.get(), monitor.ProcStop(exit_tester))
-
-            # Ensure that it hasn't started back up
-            self.assertFalse(exit_tester.get_status())
-
-            # Start it back up explicitly, and wait a few more times, to ensure that
-            # the flag governing the kill behavior is reset properly
-            exit_tester.start()
-            self.assertEqual(self.events.get(), monitor.ProcStart(exit_tester))
-
-            for x in range(5):
-                self.assertEqual(self.events.get(), monitor.ProcStop(exit_tester))
-                self.assertEqual(self.events.get(), monitor.ProcStart(exit_tester))
-
-            # Now kill it for good
-            exit_tester.kill()
-            self.assertEqual(self.events.get(), monitor.ProcStop(exit_tester))
-            self.assertFalse(exit_tester.get_status())
-        finally:
-            fake_service.stop()
