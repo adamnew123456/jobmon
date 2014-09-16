@@ -112,7 +112,7 @@ class ClientItegrationTest(unittest.TestCase):
         self.assertEqual(job_list,
                 {'queryable-task': True, 'log-stdout': False, 
                  'log-stderr': False, 'env-values': False,
-                 'exit-on-signal': False})
+                 'exit-on-signal': False, 'exit-immediately': False})
 
         # Wait for the job to die and run the query again
         self.job_events.next_event()
@@ -120,7 +120,7 @@ class ClientItegrationTest(unittest.TestCase):
         self.assertEqual(job_list,
                 {'queryable-task': False, 'log-stdout': False, 
                  'log-stderr': False, 'env-values': False,
-                 'exit-on-signal': False})
+                 'exit-on-signal': False, 'exit-immediately': False})
 
     def test_job_enter_existing_state(self):
         # Start a long running job, so that way we have time to try to start
@@ -209,3 +209,24 @@ class ClientItegrationTest(unittest.TestCase):
             self.assertEqual(sig_log.read(), 'Done\n')
 
         os.remove('/tmp/signal-test')
+
+    def test_restart(self):
+        # Run the 'exit-immediatly' job, which restarts itself
+        self.job_commands.start_job('exit-immediately')
+        self.job_events.next_event()
+
+        # Wait for it to start and stop a few times
+        for x in range(5):
+            stop_event = self.job_events.next_event()
+            self.assertIsInstance(stop_event, protocol.Event)
+            self.assertEqual(stop_event.job_name, 'exit-immediately')
+            self.assertEqual(stop_event.event_code, protocol.EVENT_STOPJOB)
+
+            start_event = self.job_events.next_event()
+            self.assertIsInstance(start_event, protocol.Event)
+            self.assertEqual(start_event.job_name, 'exit-immediately')
+            self.assertEqual(start_event.event_code, protocol.EVENT_STARTJOB)
+
+        # Kill it and wait for it to exit
+        self.job_commands.stop_job('exit-immediately')
+        self.job_events.next_event()

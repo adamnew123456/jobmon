@@ -195,7 +195,7 @@ class ConfigHandler:
                 self.logger.warning('Continuing - job %s is a duplicate', job_name)
                 continue
 
-            process = monitor.ChildProcessSkeleton(job['command'])
+            process = monitor.ChildProcessSkeleton(job_name, job['command'])
 
             if 'stdin' in job:
                 default_value = process.stdin
@@ -229,5 +229,9 @@ class ConfigHandler:
                 should_autostart = self.read_type(job, 'autostart', bool, False)
                 if should_autostart:
                     self.autostarts.append(job_name)
+
+            if 'restart' in job:
+                should_restart = self.read_type(job, 'restart', bool, False)
+                process.config(restart=should_restart)
 
             self.jobs[job_name] = process

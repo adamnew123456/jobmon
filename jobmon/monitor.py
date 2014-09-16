@@ -25,23 +25,30 @@ import sys
 import threading
 import traceback
 
+RestartRequest = namedtuple('RestartRequest', ['job'])
+
 # Constants used on the event queue, to signal that this child process has
 # started/stopped
 ProcStart = namedtuple('ProcStart', 'process')
 ProcStop = namedtuple('ProcStop', 'process')
 
 class ChildProcess:
-    def __init__(self, event_queue, program, **config):
+    def __init__(self, name, command_queue, event_queue, program, **config):
         """
         Create a new :class:`ChildProcess`.
 
+        :param str name: The name of this job.
+        :param queue.Queue command_queue: The queue to post start commands to.
         :param queue.Queue event_queue: The event queue to start/stop events to.
         :param str program: The program to run, in a format supported by ``/bin/sh``.
         :param str config: See :meth:`config` for the meaning of these options.
         """
+        self.name = name
+        self.command_queue = command_queue
         self.event_queue = event_queue
         self.program = program
         self.child_pid = None
+        self.was_stopped = False
 
         self.stdin = '/dev/null'
         self.stdout = '/dev/null'
@@ -49,6 +56,7 @@ class ChildProcess:
         self.env = {}
         self.working_dir = None
         self.exit_signal = signal.SIGTERM
+        self.restart = False
 
         self.config(**config)
 
@@ -70,6 +78,9 @@ class ChildProcess:
           dictionary.
         - ``cwd`` sets the working directory of the child process.
         - ``sig`` sets the signal to send when terminating the child process.
+        - ``restart`` determines whether (True) or not (False) the process
+          should be restarted if it dies (this does not apply when explicitly
+          stopping a process).
         """
         for config_name, config_value in config.items():
             if config_name == 'stdin':
@@ -84,6 +95,8 @@ class ChildProcess:
                 self.working_dir = config_value
             elif config_name == 'sig':
                 self.exit_signal = config_value
+            elif config_name == 'restart':
+                self.restart = config_value
             else:
                 raise NameError('No configuration option "{}"'.format(
                                 config_name))
@@ -99,6 +112,8 @@ class ChildProcess:
         # these streams to prevent the child's logs from getting polluted
         sys.stdout.flush()
         sys.stderr.flush()
+
+        self.was_stopped = False
 
         child_pid = os.fork()
         if child_pid == 0:
@@ -150,7 +165,7 @@ class ChildProcess:
 
             self.event_queue.put(ProcStart(self))
 
-            self.logger.info('Starting child process')
+            self.logger.info('Starting child process %s', self.name)
             self.logger.info('- command = "%s"', self.program)
             self.logger.info('- stdin = %s', self.stdin)
             self.logger.info('- sdout = %s', self.stdout)
@@ -170,11 +185,21 @@ class ChildProcess:
                 #
                 # Although Linux pre-2.4 had issues with this (read waitpid(2)),
                 # this is fully compatible with POSIX.
-                self.logger.info('Waiting on "%s"', self.program)
+                self.logger.info('Waiting on %s', self.name)
                 pid, status = os.waitpid(self.child_pid, 0)
-                self.logger.info('"%s" died', self.program)
+                self.logger.info('%s died', self.name)
                 self.event_queue.put(ProcStop(self))
                 self.child_pid = None
+
+                # If we're supposed to restart this process, go ahead and do
+                # that now that the main thread has been notified about the
+                # process's death.
+                #
+                # Note that we can't restart it ourselves, since we're running
+                # in a different thread - to avoid thread-safety issues, all the
+                # process launching is delegated to the main thread.
+                if self.restart and not self.was_stopped:
+                    self.command_queue.put(RestartRequest(self))
 
             # Although it might seem like a waste to spawn a thread for each
             # running child, they don't do much work (they basically block for
@@ -187,8 +212,10 @@ class ChildProcess:
         """
         Signals the process with whatever signal was configured.
         """
+        self.was_stopped = True
+
         if self.child_pid is not None:
-            self.logger.info('Sending signal %d to "%s"', self.exit_signal, self.program)
+            self.logger.info('Sending signal %d to %s', self.exit_signal, self.name)
 
             # Ensure all descendants of the process, not just the process itself,
             # die. This requires killing the process group.
@@ -208,23 +235,26 @@ class ChildProcess:
         return self.child_pid is not None
 
 class ChildProcessSkeleton(ChildProcess):
-    def __init__(self, program, **config):
+    def __init__(self, name, program, **config):
         """
         Creates a new :class:`ChildProcessSkeleton`, which is like a 
-        :class:`ChildProcess` but which allows the event queue to be specified 
-        later.
+        :class:`ChildProcess` but which allows the command and event queues 
+        to be specified later.
 
         With the exception of the event queue, the parameters are the same as
         :meth:`ChildProcess.__init__`.
         """
-        super().__init__(None, program, **config)
+        super().__init__(name, None, None, program, **config)
 
-    def set_queue(self, event_queue):
+    def set_queues(self, command_queue, event_queue):
         """
-        Sets up the event queue, allowing this skeleton to be used.
+        Sets up the command and event queues, allowing this skeleton to be used.
 
+        :param queue.Queue command_queue: The command queue to push restart \
+        requests to.
         :param queue.Queue event_queue: The event queue to push child events to.
         """
+        self.command_queue = command_queue
         self.event_queue = event_queue
 
     def start(self):
@@ -234,6 +264,6 @@ class ChildProcessSkeleton(ChildProcess):
         This simply wraps that method to raise a :class:`AttributeError` if the
         event queue has not been given.
         """
-        if self.event_queue is None:
+        if self.command_queue is None or self.event_queue is None:
             raise AttributeError('ChildProcessSkeleton was not instantiated')
         return super().start()

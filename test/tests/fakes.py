@@ -3,8 +3,12 @@
 """
 import logging
 import os
+import queue
+import threading
 
-from jobmon import transport
+from jobmon import monitor, transport
+
+THREAD_TIMEOUT = 2
 
 class FakeOneWaySocket:
     """
@@ -103,3 +107,33 @@ class FakeCommandPipe(transport.CommandPipe):
 
     def reconnect(self):
         pass
+
+class FakeService:
+    """
+    A service whose only job is to accept restart requests.
+    """
+    def __init__(self):
+        self.command_queue = queue.Queue()
+        self.quit_event = threading.Event()
+        self.the_thread = None
+
+    def start(self):
+        self.the_thread = threading.Thread(target=self.run)
+        self.the_thread.start()
+
+    def stop(self):
+        self.quit_event.set()
+        self.the_thread.join()
+
+    def run(self):
+        while True:
+            try:
+                command = self.command_queue.get(timeout=THREAD_TIMEOUT)
+
+                if isinstance(command, monitor.RestartRequest):
+                    command.job.start()
+            except queue.Empty:
+                pass
+
+            if self.quit_event.isSet():
+                break

@@ -141,9 +141,10 @@ class Supervisor:
 
         self.event_queue = queue.Queue()
 
-        # Since the child processes we are given are actually skeletons
+        # Since the child processes we are given are actually skeletons,
+        # we have to hang a bit of flesh off of them
         for skeleton in self.jobs.values():
-            skeleton.set_queue(self.event_queue)
+            skeleton.set_queues(self.event_queue, self.event_queue)
 
         # First, launch up the netqueue support threads to take care of our
         # networking
@@ -170,6 +171,9 @@ class Supervisor:
 
             if isinstance(event, netqueue.SocketMessage):
                 self.handle_network_request(event.message, event.socket)
+            elif isinstance(event, monitor.RestartRequest):
+                self.logger.info('Restarting job "%s"', event.job.name)
+                event.job.start()
             elif isinstance(event, monitor.ProcStart):
                 job_name = self.job_names[event.process]
 
