@@ -47,7 +47,7 @@ Commands:
 
   jobmon listen <NUM-EVENTS>
     Prints out events on stdout as they happen, using the same format as
-    list-jobs.
+    list-jobs (except with an additional RESTARTING action).
 
   jobmon help
     Shows a help page.
@@ -281,6 +281,8 @@ def main():
                     print('RUNNING', evt.job_name)
                 elif evt.event_code == protocol.EVENT_STOPJOB:
                     print('STOPPED', evt.job_name)
+                elif evt.event_code == protocol.EVENT_RESTARTJOB:
+                    print('RESTARTING', evt.job_name)
 
                 events_to_go -= 1
 

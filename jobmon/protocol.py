@@ -35,10 +35,10 @@ import socket
 import struct
 
 # Constants for denoting event codes
-EVENT_STARTJOB, EVENT_STOPJOB = 0, 1
+EVENT_STARTJOB, EVENT_STOPJOB, EVENT_RESTARTJOB = 0, 1, 2
 
 # Constants which denote command codes
-CMD_START, CMD_STOP, CMD_STATUS, CMD_JOB_LIST, CMD_QUIT = 2, 3, 4, 5, 6
+CMD_START, CMD_STOP, CMD_STATUS, CMD_JOB_LIST, CMD_QUIT = 3, 4, 5, 6, 7
 
 # Indicates the types of messages which can be sent via sockets
 (MSG_EVENT, MSG_COMMAND, MSG_SUCCESS, MSG_FAILURE, MSG_STATUS, MSG_JOB_LIST 

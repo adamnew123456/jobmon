@@ -64,6 +64,7 @@ class ConfigHandler:
     - :attr:`log_file` stores the path where the supervisor's logging output
       will be written.
     - :attr:`autostarts` stores a list of jobs to start immediately.
+    - :attr:`restarts` lists the jobs which are restarted automatically.
     """
     def __init__(self):
         self.jobs = {}
@@ -75,6 +76,7 @@ class ConfigHandler:
         self.log_level = logging.WARNING
         self.log_file = '/dev/null'
         self.autostarts = []
+        self.restarts = []
 
     def read_type(self, dct, key, expected_type, default=None):
         """
@@ -229,5 +231,10 @@ class ConfigHandler:
                 should_autostart = self.read_type(job, 'autostart', bool, False)
                 if should_autostart:
                     self.autostarts.append(job_name)
+
+            if 'restart' in job:
+                should_restart = self.read_type(job, 'restart', bool, False)
+                if should_restart:
+                    self.restarts.append(job_name)
 
             self.jobs[job_name] = process

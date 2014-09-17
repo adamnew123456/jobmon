@@ -30,6 +30,29 @@ import traceback
 ProcStart = namedtuple('ProcStart', 'process')
 ProcStop = namedtuple('ProcStop', 'process')
 
+class AtomicBox:
+    """
+    A value, which can only be accessed by one thread at a time.
+    """
+    def __init__(self, value):
+        self.lock = threading.Lock()
+        self.value = value
+
+    def set(self, value):
+        """
+        Sets the value of the box to a new value, blocking if anybody is
+        reading it.
+        """
+        with self.lock:
+            self.value = value
+
+    def get(self):
+        """
+        Gets the value of the box, blocking if anybody is writing to it.
+        """
+        with self.lock:
+            return self.value
+
 class ChildProcess:
     def __init__(self, event_queue, program, **config):
         """
@@ -41,7 +64,7 @@ class ChildProcess:
         """
         self.event_queue = event_queue
         self.program = program
-        self.child_pid = None
+        self.child_pid = AtomicBox(None)
 
         self.stdin = '/dev/null'
         self.stdout = '/dev/null'
@@ -92,7 +115,7 @@ class ChildProcess:
         """
         Launches the subprocess.
         """
-        if self.child_pid is not None:
+        if self.child_pid.get() is not None:
             raise ValueError('Child process already running - cannot start another')
 
         # Since we're going to be redirecting stdout/stderr, we need to flush
@@ -140,13 +163,13 @@ class ChildProcess:
                 # which we need to avoid.
                 os._exit(1)
         else:
-            self.child_pid = child_pid
+            self.child_pid.set(child_pid)
 
             # Create a new process group, so that we don't end up killing
             # ourselves if we kill this child. (For some reason, doing this
             # didn't always work when done in the child, so it is done in the
             # parent).
-            os.setpgid(self.child_pid, self.child_pid)
+            os.setpgid(child_pid, child_pid)
 
             self.event_queue.put(ProcStart(self))
 
@@ -171,10 +194,10 @@ class ChildProcess:
                 # Although Linux pre-2.4 had issues with this (read waitpid(2)),
                 # this is fully compatible with POSIX.
                 self.logger.info('Waiting on "%s"', self.program)
-                pid, status = os.waitpid(self.child_pid, 0)
+                pid, status = os.waitpid(self.child_pid.get(), 0)
                 self.logger.info('"%s" died', self.program)
                 self.event_queue.put(ProcStop(self))
-                self.child_pid = None
+                self.child_pid.set(None)
 
             # Although it might seem like a waste to spawn a thread for each
             # running child, they don't do much work (they basically block for
@@ -187,13 +210,30 @@ class ChildProcess:
         """
         Signals the process with whatever signal was configured.
         """
-        if self.child_pid is not None:
+        child_pid = self.child_pid.get()
+        if child_pid is not None:
             self.logger.info('Sending signal %d to "%s"', self.exit_signal, self.program)
 
             # Ensure all descendants of the process, not just the process itself,
             # die. This requires killing the process group.
-            proc_group = os.getpgid(self.child_pid)
-            os.killpg(proc_group, self.exit_signal)
+            try:
+                proc_group = os.getpgid(child_pid)
+                os.killpg(proc_group, self.exit_signal)
+            except OSError:
+                # This happened once during the testing, and means that the
+                # process has died somehow. Try to go ahead and kill the child
+                # by PID (since it is possible that, for some reason, setting
+                # the child's process group ID failed). If *that* fails, then
+                # just bail.
+                try:
+                    logging.info('Failed to kill child group of "%s" - falling back on killing the child itself', self.command)
+                    os.kill(child_pid, self.exit_signal)
+                except OSError:
+                    # So, *somehow*, the process isn't around, even though
+                    # the variable state indicates it is. Obviously, the
+                    # variable state is wrong, and we need to correct that.
+                    logging.info('Inconsistent child PID of "%s" - fixing', self.command)
+                    self.child_pid.set(None)
         else:
             raise ValueError('Child process not running - cannot kill it')
 
@@ -205,7 +245,7 @@ class ChildProcess:
         """
         # self.child_pid is only set when the process is running, since :meth:`start`
         # sets it and the death handler unsets it.
-        return self.child_pid is not None
+        return self.child_pid.get() is not None
 
 class ChildProcessSkeleton(ChildProcess):
     def __init__(self, program, **config):

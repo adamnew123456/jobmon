@@ -112,7 +112,7 @@ class ClientItegrationTest(unittest.TestCase):
         self.assertEqual(job_list,
                 {'queryable-task': True, 'log-stdout': False, 
                  'log-stderr': False, 'env-values': False,
-                 'exit-on-signal': False})
+                 'exit-on-signal': False, 'exit-immediately': False})
 
         # Wait for the job to die and run the query again
         self.job_events.next_event()
@@ -120,7 +120,7 @@ class ClientItegrationTest(unittest.TestCase):
         self.assertEqual(job_list,
                 {'queryable-task': False, 'log-stdout': False, 
                  'log-stderr': False, 'env-values': False,
-                 'exit-on-signal': False})
+                 'exit-on-signal': False, 'exit-immediately': False})
 
     def test_job_enter_existing_state(self):
         # Start a long running job, so that way we have time to try to start
@@ -203,9 +203,40 @@ class ClientItegrationTest(unittest.TestCase):
         self.job_commands.stop_job('exit-on-signal')
         self.job_events.next_event()
 
+        # Even though we killed it, give it time to run its signal handler.
+        # (Note that this has only occurred once, so this fix may not be
+        #  getting to the root of a bigger problem. - adamnew123456, 09-16-2014)
+        time.sleep(1)
+
         # Ensure that it logged the word 'Done', as it should have when it ran
         # its signal handler
         with open('/tmp/signal-test') as sig_log:
             self.assertEqual(sig_log.read(), 'Done\n')
 
         os.remove('/tmp/signal-test')
+
+    def test_restart(self):
+        # Run the 'exit-immediately' job and ensure that it restarts properly
+        self.job_commands.start_job('exit-immediately')
+        self.job_events.next_event()
+
+        # Go through and wait for it to restart five times
+        for _ in range(5):
+            restart_event = self.job_events.next_event()
+            self.assertEqual(restart_event.job_name, 'exit-immediately')
+            self.assertEqual(restart_event.event_code, protocol.EVENT_RESTARTJOB)
+
+            start_event = self.job_events.next_event()
+            self.assertEqual(start_event.job_name, 'exit-immediately')
+            self.assertEqual(start_event.event_code, protocol.EVENT_STARTJOB)
+
+        # Now, terminate the job and wait for the termination notice
+        self.job_commands.stop_job('exit-immediately')
+        stop_event = self.job_events.next_event()
+        self.assertEqual(stop_event.job_name, 'exit-immediately')
+        self.assertEqual(stop_event.event_code, protocol.EVENT_STOPJOB)
+
+        # Ensure that it doesn't start by waiting a while and then checking it
+        # again
+        time.sleep(5)
+        self.assertFalse(self.job_commands.is_running('exit-immediately'))

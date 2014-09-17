@@ -19,7 +19,7 @@ class Supervisor:
     handled in conjunction with :mod:`jobmon.netqueue`, so the functioning
     core of this class is relatively small.
     """
-    def __init__(self, jobs, control_path, autostarts):
+    def __init__(self, jobs, control_path, autostarts, restarts):
         """
         Creates a new :class:`Supervisor`.
 
@@ -27,17 +27,20 @@ class Supervisor:
         :class:`jobmon.monitor.ChildProcessSkeleton` objects.
         :param str control_path: Where to store the control sockets.
         :param list autostarts: Which jobs should be started immediately.
+        :param list restarts: Which jobs should be restarted if they die.
         """
         self.jobs = jobs
         self.job_names = {job: job_name for job_name, job in jobs.items()}
         self.control_path = control_path
         self.autostarts = autostarts
+        self.restarts = restarts
         self.is_done = False
 
         # These are assigned when run, but put up here for reference
         self.event_queue = None
         self.reply_queue = None
         self.event_dispatch_queue = None
+        self.blocked_restarts = set()
 
         self.logger = logging.getLogger('supervisor.main')
 
@@ -71,6 +74,11 @@ class Supervisor:
             # Try to start the given job
             self.logger.info('Received start message for %s', command.job_name)
             if self.ensure_job_exists(command.job_name, sock):
+                if command.job_name in self.blocked_restarts:
+                    # Remove the job from the block list, allowing it to restart
+                    # if it dies this time.
+                    self.blocked_restarts.remove(command.job_name)
+
                 the_job = self.jobs[command.job_name]
                 if the_job.get_status():
                     # Already running jobs cannot be started
@@ -89,12 +97,20 @@ class Supervisor:
             if self.ensure_job_exists(command.job_name, sock):
                 the_job = self.jobs[command.job_name]
                 if not the_job.get_status():
-                    # Dead jobs cannot be stopped
-                    self.reply_queue.put(netqueue.SocketMessage(
-                        protocol.FailureResponse(command.job_name,
-                            protocol.ERR_JOB_STOPPED),
-                        sock))
+                    if command.job_name in self.restarts:
+                        # Stopping a job which is intended to restart blocks it
+                        # from being restarted, and should not raise an error.
+                        self.blocked_restarts.add(command.job_name)
+                    else:
+                        # Dead jobs cannot be stopped
+                        self.reply_queue.put(netqueue.SocketMessage(
+                            protocol.FailureResponse(command.job_name,
+                                protocol.ERR_JOB_STOPPED),
+                            sock))
                 else:
+                    if command.job_name in self.restarts:
+                        self.blocked_restarts.add(command.job_name)
+
                     the_job.kill()
                     self.reply_queue.put(netqueue.SocketMessage(
                         protocol.SuccessResponse(command.job_name),
@@ -157,7 +173,7 @@ class Supervisor:
         net_events.start()
 
         # Autostart all the jobs before any others come in
-        self.logger.info('Autostarting jos')
+        self.logger.info('Autostarting %d jobs', len(self.autostarts))
         for job in self.autostarts:
             self.logger.info(' - %s', job)
             the_job = self.jobs[job]
@@ -179,9 +195,18 @@ class Supervisor:
             elif isinstance(event, monitor.ProcStop):
                 job_name = self.job_names[event.process]
 
-                self.logger.info('Job %s stopped', job_name)
-                self.event_dispatch_queue.put(
-                    protocol.Event(job_name, protocol.EVENT_STOPJOB))
+                if (job_name in self.restarts and 
+                    job_name not in self.blocked_restarts):
+                    # If this should be restarted, and the user has not explicitly
+                    # stopped it, then let it restart
+                    self.logger.info('Restarting job %s', job_name)
+                    self.jobs[job_name].start()
+                    self.event_dispatch_queue.put(
+                        protocol.Event(job_name, protocol.EVENT_RESTARTJOB))
+                else:
+                    self.logger.info('Job %s stopped', job_name)
+                    self.event_dispatch_queue.put(
+                        protocol.Event(job_name, protocol.EVENT_STOPJOB))
 
             # Avoid waiting for the next event if we're ready to quit now
             if self.is_done:
