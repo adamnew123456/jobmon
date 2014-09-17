@@ -9,8 +9,14 @@ managing children. This is not meant to be run standalone - see
 import logging
 import os, os.path
 import queue
+import time
 
 from jobmon import monitor, netqueue, protocol
+
+# If it is noticed that two restart requests occur within RESTART_TIMEOUT seconds,
+# then the service is stopped and not allowed to restart for RESTART_BACKOFF seconds.
+RESTART_TIMEOUT = 5
+RESTART_BACKOFF = 10
 
 class Supervisor:
     """
@@ -41,6 +47,8 @@ class Supervisor:
         self.reply_queue = None
         self.event_dispatch_queue = None
         self.blocked_restarts = set()
+        self.restart_times = {}
+        self.restart_timeouts = {}
 
         self.logger = logging.getLogger('supervisor.main')
 
@@ -101,6 +109,26 @@ class Supervisor:
                         # Stopping a job which is intended to restart blocks it
                         # from being restarted, and should not raise an error.
                         self.blocked_restarts.add(command.job_name)
+
+                        # Also, since the job is explicitly stopped, we don't
+                        # need to track its restart times (since the user will
+                        # have to explicitly request the job start again)
+                        if command.job_name in self.restart_timeouts:
+                            del self.restart_timeouts[command.job_name]
+                        if command.job_name in self.restart_times:
+                            del self.restart_times[command.job_name]
+
+                        self.logger.info('Blocking restart of %s', command.job_name)
+                        self.reply_queue.put(netqueue.SocketMessage(
+                            protocol.SuccessResponse(command.job_name),
+                            sock))
+
+                        # Also, the sender may be waiting on a kill event that
+                        # will never come, since we blocked the restart. Fake
+                        # an event so they will be happy
+                        self.event_dispatch_queue.put(
+                            protocol.Event(command.job_name, 
+                                           protocol.EVENT_STOPJOB))
                     else:
                         # Dead jobs cannot be stopped
                         self.reply_queue.put(netqueue.SocketMessage(
@@ -110,6 +138,13 @@ class Supervisor:
                 else:
                     if command.job_name in self.restarts:
                         self.blocked_restarts.add(command.job_name)
+
+                    if command.job_name in self.restart_timeouts:
+                        del self.restart_timeouts[command.job_name]
+                    if command.job_name in self.restart_times:
+                        del self.restart_times[command.job_name]
+
+                    self.logger.info('Killing job %s', command.job_name)
 
                     the_job.kill()
                     self.reply_queue.put(netqueue.SocketMessage(
@@ -142,6 +177,72 @@ class Supervisor:
                     job.kill()
 
             self.is_done = True
+
+    def handle_proc_stop(self, job_name):
+        """
+        This handles both the restart-capturing logic (which decides whether
+        to throttle jobs which are restarting too frequently) as well as 
+        normal stops and restarts.
+        """
+        now = time.time()
+        if (job_name in self.restarts and 
+            job_name not in self.blocked_restarts):
+            # This is a job that we can restart, but ensure that it isn't
+            # restarting too quickly    
+            last_restart = self.restart_times.get(job_name, 0)
+            self.restart_times[job_name] = now
+
+            if now - last_restart <= RESTART_TIMEOUT:
+                # Attach a timeout to the job and force it to wait
+                self.logger.info('Throttling job %s, restarted %f second ago',
+                                 job_name, now - last_restart)
+                self.logger.info('Restarting job %s in %d seconds',
+                                 job_name, RESTART_BACKOFF)
+                self.restart_timeouts[job_name] = RESTART_BACKOFF
+            else:
+                self.logger.info('Restarting job %s', job_name)
+                self.jobs[job_name].start()
+                self.event_dispatch_queue.put(
+                    protocol.Event(job_name, protocol.EVENT_RESTARTJOB))
+        else:
+            self.logger.info('Job %s stopped', job_name)
+            self.event_dispatch_queue.put(
+                protocol.Event(job_name, protocol.EVENT_STOPJOB))
+
+    def start_queued_restarts(self, time_delta):
+        """
+        Find all of the jobs which are being delayed from restarting, and
+        restart the ones whose delays have expired.
+        """
+        logging.info('Removing %f seconds from timeouts', time_delta)
+
+        jobs_to_restart = []
+        for job_name, timeout in self.restart_timeouts.items():
+            timeout -= time_delta
+            if timeout > 0:
+                self.restart_timeouts[job_name] = timeout
+            else:
+                jobs_to_restart.append(job_name)
+
+        for job_name in jobs_to_restart:
+            self.logger.info('Restarting job %s', job_name)
+            self.jobs[job_name].start()
+            self.restart_times[job_name] = time.time()
+            self.event_dispatch_queue.put(
+                protocol.Event(job_name, protocol.EVENT_RESTARTJOB))
+
+            # Since we won't need to track this process (at least until it
+            # dies gain), go ahead and remove its timeout
+            del self.restart_timeouts[job_name]
+
+    def get_minimum_restart_time(self):
+        """
+        Figure out how long until the next delayed restart needs to occur.
+        """
+        try:
+            return min(self.restart_timeouts.values())
+        except ValueError:
+            return None
 
     def run(self):
         """
@@ -181,10 +282,22 @@ class Supervisor:
 
         # Process each event as it comes in, dispatching to the appropriate
         # handler depending upon what type of event it is
+        previous_now = 0
+        now = time.time()
         while not self.is_done:
-            event = self.event_queue.get()
+            time_until_next_restart = self.get_minimum_restart_time()
+            try:
+                event = self.event_queue.get(timeout=time_until_next_restart)
+            except queue.Empty:
+                event = None
 
-            if isinstance(event, netqueue.SocketMessage):
+            now, previous_now = time.time(), now
+            self.start_queued_restarts(now - previous_now)
+
+            if event is None:
+                # We were woken up just to restart a job, and nothing else
+                pass
+            elif isinstance(event, netqueue.SocketMessage):
                 self.handle_network_request(event.message, event.socket)
             elif isinstance(event, monitor.ProcStart):
                 job_name = self.job_names[event.process]
@@ -194,19 +307,7 @@ class Supervisor:
                     protocol.Event(job_name, protocol.EVENT_STARTJOB))
             elif isinstance(event, monitor.ProcStop):
                 job_name = self.job_names[event.process]
-
-                if (job_name in self.restarts and 
-                    job_name not in self.blocked_restarts):
-                    # If this should be restarted, and the user has not explicitly
-                    # stopped it, then let it restart
-                    self.logger.info('Restarting job %s', job_name)
-                    self.jobs[job_name].start()
-                    self.event_dispatch_queue.put(
-                        protocol.Event(job_name, protocol.EVENT_RESTARTJOB))
-                else:
-                    self.logger.info('Job %s stopped', job_name)
-                    self.event_dispatch_queue.put(
-                        protocol.Event(job_name, protocol.EVENT_STOPJOB))
+                self.handle_proc_stop(job_name)
 
             # Avoid waiting for the next event if we're ready to quit now
             if self.is_done:
