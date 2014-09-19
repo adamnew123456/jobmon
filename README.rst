@@ -20,10 +20,8 @@ JobMon is a job monitoring system, which is capable of:
   (which uses JSON) is covered later in this document.
 - Dispatching events over UNIX sockets using a similar protocol to that
   employed by commands and responses.
-
-JobMon does not yet, however, contain built-in ways to autostart processes,
-restart processes when they die, etc. However, JobMon is powerful enough to
-implement these constructs on top of the provided command set.
+- Automatically starting and restarting commands (assuming it is configured
+  in the job's configuration).
 
 JobMon is, conceptually, two pieces - an API (which can be used from Python
 code) and a command line utility. The pieces common to both (which is
@@ -118,7 +116,8 @@ When using a jobs file (that is included by the master), the top-level
             },
             "working-dir": "/home/bob",
             "signal": "SIGSTOP",
-            "autostart": false
+            "autostart": false,
+            "restart: true
         }
     }
 
@@ -142,6 +141,13 @@ When using a jobs file (that is included by the master), the top-level
 - ``autostart`` dictates whether or not the job should be started
   automatically by the daemon (the default is that the job is *not* started
   automatically).
+- ``restart`` dictates whether or not the job will be restarted when it crashes.
+
+  Note that this is subject to an important restriction - if the job dies
+  within 5 seconds of it dying previously, then JobMon will force the job to
+  wait for 15 seconds before it can be restarted again. This is meant to
+  prevent the job from burning CPU cycles by restarting repeatedly. The 5 and
+  15 second parameters cannot currently be changed.
 
 Note that the ``stdin``, ``stdout``, ``stderr``, and ``working-dir`` fields do
 environment substitution in the same way as in the supervisor configuration
