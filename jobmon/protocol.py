@@ -66,7 +66,8 @@ def reason_to_str(reason):
 class Event(namedtuple('Event', ['job_name', 'event_code'])):
     EVENT_NAMES = {
         EVENT_STARTJOB: 'Started',
-        EVENT_STOPJOB: 'Stopped'
+        EVENT_STOPJOB: 'Stopped',
+        EVENT_RESTARTJOB: 'Restarted',
     }
 
     def __str__(self):
