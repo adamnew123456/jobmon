@@ -27,6 +27,9 @@ Changes:        23rd Jan 2009 (David Mytton <david@boxedice.com>)
                   the SystemExit and doing odd things.
                 - Allowed the parent process to stick around, which also aids
                   unit testing
+                27th November 2013
+                - Added the option to kill the parent, rather than forcing it
+                  to stick around for no reason.
 '''
 
 # Core modules
@@ -43,8 +46,9 @@ class Daemon(object):
     Usage: subclass the Daemon class and override the run() method
     """
     def __init__(self, stdin=os.devnull, stdout=os.devnull, 
-                 stderr=os.devnull, home_dir='.', umask=0o22, 
-                 verbose=1):
+                 stderr=os.devnull, home_dir='.', umask=0o22,
+                 kill_parent=True, verbose=1):
+        self.kill_parent = kill_parent
         self.stdin = stdin
         self.stdout = stdout
         self.stderr = stderr
@@ -62,9 +66,12 @@ class Daemon(object):
         try:
             pid = os.fork()
             if pid > 0:
-                # Let the first parent continue, since that could be running
-                # from the CLI, or running a test, or something
-                return False
+                if self.kill_parent:
+                    os._exit(0)
+                else:
+                    # Let the first parent continue, since that could be running
+                    # from the CLI, or running a test, or something
+                    return False
         except OSError as e:
             sys.stderr.write(
                 "fork #1 failed: %d (%s)\n" % (e.errno, e.strerror))

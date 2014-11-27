@@ -5,6 +5,7 @@ Note that this is deliberately small - the 'test_command_protocol' module
 deals with the command protocol in deeper detail, but this merely tests
 the means of transport.
 """
+import os.path
 import queue
 import socket
 import threading
@@ -52,6 +53,9 @@ class CommandNetQueueTester(unittest.TestCase):
         # Connect to the socket, and send out a request. Note that the
         # start_job method is blocking, so we know we've succeeded when it
         # returns
+        while not os.path.exists(TEST_SOCKET_FILENAME):
+            time.sleep(1)
+
         client_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         client_socket.connect(TEST_SOCKET_FILENAME)
         command_pipe = fakes.FakeCommandPipe(client_socket)
@@ -80,6 +84,9 @@ class EventNetQueueTester(unittest.TestCase):
         self.netqueue.server_listening.wait()
 
         # Set up an event pipe, and connect it to the network event queue
+        while not os.path.exists(TEST_SOCKET_FILENAME):
+            time.sleep(1)
+
         client_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         client_socket.connect(TEST_SOCKET_FILENAME)
         event_stream = fakes.FakeEventStream(client_socket)
