@@ -20,20 +20,25 @@ from jobmon import config, daemon, service
 # daemon, so if any errors occur before that, they can be seen
 logging.basicConfig(level=logging.INFO)
 
-def run(config_handler):
+def run(config_handler, as_daemon=True):
     """
     Starts the supervisor daemon, passing to it the appropriate 
     configuration.
 
     :param config.ConfigHandler config_handler: The configuration to run the \
     daemon with.
+    :param bool as_daemon: If ``True``, then this will launch a daemon and the \
+    parent process will exit. If ``False``, then this will launch a daemon but \
+    the parent process will continue.
     """
     supervisor = service.Supervisor(config_handler.jobs, 
                                     config_handler.control_dir,
                                     config_handler.autostarts,
                                     config_handler.restarts)
 
-    supervisor_wrapper = SupervisorDaemon(home_dir=config_handler.working_dir)
+    supervisor_wrapper = SupervisorDaemon(
+        home_dir=config_handler.working_dir,
+        kill_parent=as_daemon)
     supervisor_wrapper.start(supervisor, config_handler)
 
 class SupervisorDaemon(daemon.Daemon):
