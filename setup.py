@@ -5,7 +5,8 @@ setup(
     packages=['jobmon'],
     entry_points = {
         'console_scripts': 
-        ['jobmon = jobmon.runner:main']
+        ['jobmon = jobmon.runner:main',
+        'jobmon-tk = jobmon.tk:main']
     },
     author='Adam Marchetti',
     version='0.3',

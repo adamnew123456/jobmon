@@ -190,6 +190,26 @@ stopped. ``jobmon listen`` might produce the following event stream::
     RUNNNIG Job B
     STOPPED Job B
 
+GUI Job Monitor
+---------------
+
+There is also a graphical interface which can interact with running jobmon
+instances, called ``jobmon-tk`` - it has to be run with the path to the
+jobmon socket directory, such as::
+
+    $ jobmon-tk "$JOBMON_CONTROL_DIR"
+
+It has two tabs - the first shows a log of events that have happened since
+``jobmon-tk`` connected to the server. The second shows a list of events,
+showing whether each is running or not, and allows you to start/stop a job
+by clicking a button.
+
+.. image:: jobmon-tk.png
+
+Note that you must have Tkinter available from Python (which may or may not
+require a bit of additional setup, depending upon your Python distribution)
+to run ``jobmon-tk``.
+
 Installation
 ------------
 
