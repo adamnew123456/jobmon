@@ -337,6 +337,14 @@ class NetworkEventQueue:
         server_socket.close()
         os.remove(self.sock_path)
 
+        # Ensure that all peers know that we're going down before we disconnect them
+        for peer in self.connections:
+            try:
+                protocol.send_message(protocol.Event(None, protocol.EVENT_TERMINATE))
+            except OSError:
+                continue
+
         for peer in self.connections:
             peer.close()
+
         self.connections.clear()

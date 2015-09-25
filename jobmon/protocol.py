@@ -35,7 +35,7 @@ import socket
 import struct
 
 # Constants for denoting event codes
-EVENT_STARTJOB, EVENT_STOPJOB, EVENT_RESTARTJOB = 0, 1, 2
+EVENT_STARTJOB, EVENT_STOPJOB, EVENT_RESTARTJOB, EVENT_TERMINATE = 0, 1, 2, 3
 
 # Constants which denote command codes
 CMD_START, CMD_STOP, CMD_STATUS, CMD_JOB_LIST, CMD_QUIT = 3, 4, 5, 6, 7
@@ -68,6 +68,7 @@ class Event(namedtuple('Event', ['job_name', 'event_code'])):
         EVENT_STARTJOB: 'Started',
         EVENT_STOPJOB: 'Stopped',
         EVENT_RESTARTJOB: 'Restarted',
+        EVENT_TERMINATE: 'Server stopped'
     }
 
     def __str__(self):

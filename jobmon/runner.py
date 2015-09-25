@@ -283,6 +283,9 @@ def main():
                     print('STOPPED', evt.job_name)
                 elif evt.event_code == protocol.EVENT_RESTARTJOB:
                     print('RESTARTING', evt.job_name)
+                elif evt.event_code == protocol.EVENT_TERMINATE:
+                    print('TERMINATE')
+                    break
 
                 events_to_go -= 1
 
