@@ -49,6 +49,9 @@ Commands:
     Prints out events on stdout as they happen, using the same format as
     list-jobs (except with an additional RESTARTING action).
 
+  jobmon wait <JOB NAME>
+    Waits until the given job changes state.
+
   jobmon help
     Shows a help page.
 
@@ -102,6 +105,11 @@ the list-jobs command.''')
         help='''How many events to print. A positive integer will print that
 number of events only, while zero or a negative integer will print events
 indefinitely.''')
+
+    wait_parser = command_arg.add_parser('wait',
+        help='''Waits until the given job changes its state.''')
+    wait_parser.add_argument('JOB',
+        help='''The name of the job to wait for''')
 
     command_arg.add_parser('list-jobs',
         help='''Prints out a list of jobs, and their status, in a simple space
@@ -289,6 +297,28 @@ def main():
                 events_to_go -= 1
 
             return 0
+        except BrokenPipeError:
+            # This could be a normal result if we're being piped through less
+            # with an infinite number
+            return 0
+        except IOError:
+            print('Server dropped our connection.',
+                  file=sys.stderr)
+            return 1
+        except OSError as err:
+            print(os.strerror(err.errno),
+                    'Is $JOBMON_CONTROL_DIR set?',
+                  file=sys.stderr)
+            return 1
+    elif args.command == 'wait':
+        try:
+            event_stream = transport.EventStream(control_dir)
+            job = args.JOB
+
+            while events_to_go > 0:
+                evt = event_stream.next_event()
+                if evt.job_name == job:
+                    break
         except BrokenPipeError:
             # This could be a normal result if we're being piped through less
             # with an infinite number
