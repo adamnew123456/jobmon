@@ -8,7 +8,7 @@ setup(
         ['jobmon = jobmon.runner:main']
     },
     author='Adam Marchetti',
-    version='0.2.5',
+    version='0.2.6',
     description='Job monitoring system',
     author_email='adamnew123456@gmail.com',
     url='http://github.com/adamnew123456/jobmon',

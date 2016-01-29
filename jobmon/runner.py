@@ -153,13 +153,12 @@ def main():
             traceback.print_exc(file=sys.stderr)
             return -1
 
-        launcher.run(config_handler)
-
         # Print out the control directory so that the user knows what to set
         # JOBMON_CONTROL_DIR to
         control_dir = os.path.abspath(config_handler.control_dir)
         print(control_dir)
-        return 0
+
+        launcher.run(config_handler)
     elif args.command == 'start':
         # Establish a connection to the job service, and start the job.
         try:
