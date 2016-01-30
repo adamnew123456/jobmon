@@ -10,7 +10,7 @@ subprocesses, as well as notifying the owner that the subprocesses have started
     >>> proc = ChildProcessSkeleton('echo "$MESSAGE"')
     >>> proc.config(stdout='/tmp/hello-world',
     ...             env={'MESSAGE': 'Hello, World'})
-    >>> proc.set_queue(THE_EVENT_QUEUE)
+    >>> proc.set_sock(THE_STATUS_SOCKET)
 
 The event queue (``THE_EVENT_QUEUE`` in the example) receives two kinds of
 events from the child process - :class:`ProcStart` indicates that a process has
@@ -25,10 +25,7 @@ import sys
 import threading
 import traceback
 
-# Constants used on the event queue, to signal that this child process has
-# started/stopped
-ProcStart = namedtuple('ProcStart', 'process')
-ProcStop = namedtuple('ProcStop', 'process')
+from jobmon import protocol
 
 class AtomicBox:
     """
@@ -54,15 +51,17 @@ class AtomicBox:
             return self.value
 
 class ChildProcess:
-    def __init__(self, event_queue, program, **config):
+    def __init__(self, event_sock, name, program, **config):
         """
         Create a new :class:`ChildProcess`.
 
-        :param queue.Queue event_queue: The event queue to start/stop events to.
+        :param protocol.Protocol* event_sock: The event socket to send start/stop events to.
+        :param str name: The name of this job.
         :param str program: The program to run, in a format supported by ``/bin/sh``.
         :param str config: See :meth:`config` for the meaning of these options.
         """
-        self.event_queue = event_queue
+        self.event_sock = event_sock
+        self.name = name
         self.program = program
         self.child_pid = AtomicBox(None)
 
@@ -169,9 +168,7 @@ class ChildProcess:
             # ourselves if we kill this child. (For some reason, doing this
             # didn't always work when done in the child, so it is done in the
             # parent).
-            os.setpgid(child_pid, child_pid)
-
-            self.event_queue.put(ProcStart(self))
+            self.event_sock.send(protocol.Event(self.name, protocol.EVENT_STARTJOB))
 
             self.logger.info('Starting child process')
             self.logger.info('- command = "%s"', self.program)
@@ -196,7 +193,7 @@ class ChildProcess:
                 self.logger.info('Waiting on "%s"', self.program)
                 pid, status = os.waitpid(self.child_pid.get(), 0)
                 self.logger.info('"%s" died', self.program)
-                self.event_queue.put(ProcStop(self))
+                self.event_sock.send(protocol.Event(self.name, protocol.EVENT_STOPJOB))
                 self.child_pid.set(None)
 
             # Although it might seem like a waste to spawn a thread for each
@@ -248,7 +245,7 @@ class ChildProcess:
         return self.child_pid.get() is not None
 
 class ChildProcessSkeleton(ChildProcess):
-    def __init__(self, program, **config):
+    def __init__(self, name, program, **config):
         """
         Creates a new :class:`ChildProcessSkeleton`, which is like a 
         :class:`ChildProcess` but which allows the event queue to be specified 
@@ -257,23 +254,24 @@ class ChildProcessSkeleton(ChildProcess):
         With the exception of the event queue, the parameters are the same as
         :meth:`ChildProcess.__init__`.
         """
-        super().__init__(None, program, **config)
+        super().__init__(None, name, program, **config)
 
-    def set_queue(self, event_queue):
+    def set_event_sock(self, event_sock):
         """
         Sets up the event queue, allowing this skeleton to be used.
 
-        :param queue.Queue event_queue: The event queue to push child events to.
+        :param protocol.Protocol* event_sock: The event socket to send start/stop events to.
         """
-        self.event_queue = event_queue
+        self.event_sock = event_sock
 
     def start(self):
         """
         See :meth`ChildProcess.start`.
 
         This simply wraps that method to raise a :class:`AttributeError` if the
-        event queue has not been given.
+        event socket has not been provided.
         """
-        if self.event_queue is None:
+        if self.event_sock is None:
             raise AttributeError('ChildProcessSkeleton was not instantiated')
+
         return super().start()
