@@ -31,8 +31,7 @@ class EventStream:
      - Using :meth:`EventStream.next_event` to pull in an event in a blocking
        fashion. This is useful for programs that can focus solely on events for
        a period of time.
-     - Using :attr:`EventStream.fileno` to connect the socket used here with
-       the :mod:`select` module.
+     - Passing it to select, since it supports :meth:`fileno`
     """
     def __init__(self, socket_no):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -42,11 +41,12 @@ class EventStream:
         except OSError:
             raise IOError('Cannot connect to supervisor')
 
-        self.fileno = self.sock.fileno()
+    def fileno(self):
+        return self.sock.fileno()
 
     def next_event(self):
         """
-        Reads in a single event synchronously (i.e. this blocks) and returns it.
+        Waits for a single event synchronously and returns it.
 
         :return: The next event in the event stream.
         """
