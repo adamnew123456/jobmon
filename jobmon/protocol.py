@@ -272,26 +272,6 @@ RECV_HANDLERS = {
 # Each message has a 'type' field, which allows the decoding class to be
 # identified in RECV_HANDLERS.
 
-def _nonblocking_recv(sock, size):
-    """
-    A non-blocking version of socket.recv() which avoids EAGAIN.
-    """
-    # Note that select fails in the unit tests since the mocks don't actually
-    # have file numbers. As a result, just avoid select() if we can't use it.
-    can_select = hasattr(sock, 'fileno')
-
-    buffer = b''
-    while len(buffer) < size:
-        # This avoids EAGAIN by waiting until there is actually data. 
-        if can_select:
-            select.select([sock], [], [])
-        chunk = sock.recv(size - len(buffer))
-        if not chunk:
-            raise IOError('Peer dropped us')
-
-        buffer += chunk
-    return buffer
-
 class ProtocolStreamSocket:
     """
     A protocol socket is a wrapper for sockets which speaks the Jobmon 
@@ -304,6 +284,9 @@ class ProtocolStreamSocket:
     """
     def __init__(self, sock):
         self.sock = sock
+
+    def fileno(self):
+        return self.sock.fileno()
 
     def send(self, message):
         """
@@ -327,11 +310,11 @@ class ProtocolStreamSocket:
         """
         # First, read the 4-byte length header to know how long the body content
         # should be.
-        length_header = _nonblocking_recv(sock, 4)
+        length_header = self.sock.recv(4)
         (body_length,) = struct.unpack('>I', length_header)
 
         # Read in and decode the raw JSON into UTF-8
-        raw_json_body = _nonblocking_recv(sock, body_length)
+        raw_json_body = self.sock.recv(body_length)
 
         json_body = raw_json_body.decode('utf-8')
         json_data = json.loads(json_body)
@@ -340,7 +323,7 @@ class ProtocolStreamSocket:
     def close(self):
         self.sock.close()
 
-class ProtocoDatagramSocket:
+class ProtocolDatagramSocket:
     """
     This differs from ProtocolStreamSocket because this operates via datagram
     sockets, but it does the same thing.
@@ -353,6 +336,9 @@ class ProtocoDatagramSocket:
     def __init__(self, sock, peer):
         self.sock = sock
         self.peer = peer
+
+    def fileno(self):
+        return self.sock.fileno()
 
     def send(self, message):
         """
@@ -375,7 +361,7 @@ class ProtocoDatagramSocket:
         length_header = datagram[:4]
         (body_length,) = struct.unpack('>I', length_header)
 
-        raw_json_body = datagram[4:4 + length_header]
+        raw_json_body = datagram[4:4 + body_length]
 
         json_body = raw_json_body.decode('utf-8')
         json_data = json.loads(json_body)
@@ -391,6 +377,9 @@ class ProtocolFile:
     def __init__(self, fobj):
         self.fobj = fobj
 
+    def fileno(self):
+        return self.fobj.fileno()
+
     def send(self, message):
         """
         Sends a message over a socket, transforming it into JSON first.
@@ -402,6 +391,7 @@ class ProtocolFile:
         to_send += json_bytes
 
         self.fobj.write(to_send)
+        self.fobj.flush()
 
     def recv(self):
         """
