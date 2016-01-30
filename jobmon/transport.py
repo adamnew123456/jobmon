@@ -34,12 +34,12 @@ class EventStream:
      - Using :attr:`EventStream.fileno` to connect the socket used here with
        the :mod:`select` module.
     """
-    def __init__(self, socket_dir):
-        socket_path = os.path.join(socket_dir, 'event')
-        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    def __init__(self, socket_no):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            self.sock.connect(socket_path)
-        except FileNotFoundError:
+            self.sock.connect(('localhost', socket_no))
+            self.sock = protocol.ProtocolStreamSocket(self.sock)
+        except OSError:
             raise IOError('Cannot connect to supervisor')
 
         self.fileno = self.sock.fileno()
@@ -50,7 +50,7 @@ class EventStream:
 
         :return: The next event in the event stream.
         """
-        return protocol.recv_message(self.sock)
+        return self.sock.recv()
 
     def destroy(self):
         """
@@ -81,8 +81,8 @@ class CommandPipe:
     Note that if any of these methods are called with job names that don't
     exist, then a :class:`NameError` will be raised.
     """
-    def __init__(self, socket_dir):
-        self.socket_path = os.path.join(socket_dir, 'command')
+    def __init__(self, socket_no):
+        self.port = socket_no
 
     def reconnect(self):
         """
@@ -92,9 +92,10 @@ class CommandPipe:
         """
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
-            self.sock.connect(self.socket_path)
-        except FileNotFoundError:
-            raise IOError('Cannot access supervisor')
+            self.sock.connect(('localhost', self.port))
+            self.sock = protocol.ProtocolStreamSocket(self.sock)
+        except OSError:
+            raise IOError('Cannot connect to supervisor')
 
     def start_job(self, job_name):
         """
@@ -104,18 +105,23 @@ class CommandPipe:
         """
         self.reconnect()
         msg = protocol.Command(job_name, protocol.CMD_START)
-        protocol.send_message(msg, self.sock)
-        result = protocol.recv_message(self.sock)
+        self.sock.send(msg)
+        result = self.sock.recv()
         
-        if isinstance(result, protocol.FailureResponse):
-            if result.reason == protocol.ERR_NO_SUCH_JOB:
-                raise NameError('The job "{}" does not exist'.format(job_name))
-            elif result.reason == protocol.ERR_JOB_STARTED:
-                raise JobError('Tried to start - job "{}" already running'.format(
-                                job_name))
-            else:
-                raise JobError('Unknown error: reason "{}"'.format(
-                    protocol.reason_to_str(result.reason)))
+        try:
+            if isinstance(result, protocol.FailureResponse):
+                if result.reason == protocol.ERR_NO_SUCH_JOB:
+                    raise NameError(
+                        'The job "{}" does not exist'.format(job_name))
+                elif result.reason == protocol.ERR_JOB_STARTED:
+                    raise JobError(
+                        'Tried to start - job "{}" already running'.format(
+                            job_name))
+                else:
+                    raise JobError('Unknown error: reason "{}"'.format(
+                        protocol.reason_to_str(result.reason)))
+        finally:
+            self.sock.close()
 
     def stop_job(self, job_name):
         """
@@ -125,18 +131,23 @@ class CommandPipe:
         """
         self.reconnect()
         msg = protocol.Command(job_name, protocol.CMD_STOP)
-        protocol.send_message(msg, self.sock)
-        result = protocol.recv_message(self.sock)
+        self.sock.send(msg)
+        result = self.sock.recv() 
 
-        if isinstance(result, protocol.FailureResponse):
-            if result.reason == protocol.ERR_NO_SUCH_JOB:
-                raise NameError('The job "{}" does not exist'.format(job_name))
-            elif result.reason == protocol.ERR_JOB_STOPPED:
-                raise JobError('Tried to stop - job "{}" not running'.format(
-                               job_name))
-            else:
-                raise JobError('Unknown error: reason "{}"'.format(
-                    protocol.reason_to_str(result.reason)))
+        try:
+            if isinstance(result, protocol.FailureResponse):
+                if result.reason == protocol.ERR_NO_SUCH_JOB:
+                    raise NameError(
+                        'The job "{}" does not exist'.format(job_name))
+                elif result.reason == protocol.ERR_JOB_STOPPED:
+                    raise JobError(
+                        'Tried to stop - job "{}" not running'.format(
+                           job_name))
+                else:
+                    raise JobError('Unknown error: reason "{}"'.format(
+                        protocol.reason_to_str(result.reason)))
+        finally:
+            self.sock.close()
 
     def is_running(self, job_name):
         """
@@ -147,17 +158,21 @@ class CommandPipe:
         """
         self.reconnect()
         msg = protocol.Command(job_name, protocol.CMD_STATUS)
-        protocol.send_message(msg, self.sock)
-        result = protocol.recv_message(self.sock)
+        self.sock.send(msg)
+        result = self.sock.recv()
 
-        if isinstance(result, protocol.FailureResponse):
-            if result.reason == protocol.ERR_NO_SUCH_JOB:
-                raise NameError('The job "{}" does not exist'.format(job_name))
+        try:
+            if isinstance(result, protocol.FailureResponse):
+                if result.reason == protocol.ERR_NO_SUCH_JOB:
+                    raise NameError(
+                        'The job "{}" does not exist'.format(job_name))
+                else:
+                    raise JobError('Unknown error: reason "{}"'.format(
+                        protocol.reason_to_str(result.reason)))
             else:
-                raise JobError('Unknown error: reason "{}"'.format(
-                    protocol.reason_to_str(result.reason)))
-        else:
-            return result.is_running
+                return result.is_running
+        finally:
+            self.sock.close()
 
     def get_jobs(self):
         """
@@ -168,13 +183,17 @@ class CommandPipe:
         """
         self.reconnect()
         msg = protocol.Command(None, protocol.CMD_JOB_LIST)
-        protocol.send_message(msg, self.sock)
-        result = protocol.recv_message(self.sock)
-        if isinstance(result, protocol.FailureResponse):
-            raise JobError('Unknown error: reason "{}"'.format(
-                protocol.reason_to_str(result.reason)))
-        else:
-            return result.all_jobs
+        self.sock.send(msg)
+        result = self.sock.recv() 
+
+        try:
+            if isinstance(result, protocol.FailureResponse):
+                raise JobError('Unknown error: reason "{}"'.format(
+                    protocol.reason_to_str(result.reason)))
+            else:
+                return result.all_jobs
+        finally:
+            self.sock.close()
 
     def terminate(self):
         """
@@ -182,7 +201,8 @@ class CommandPipe:
         """
         self.reconnect()
         msg = protocol.Command(None, protocol.CMD_QUIT)
-        protocol.send_message(msg, self.sock)
+        self.sock.send(msg)
+        self.sock.close()
 
     def destroy(self):
         """
