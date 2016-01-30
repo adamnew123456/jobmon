@@ -272,23 +272,7 @@ RECV_HANDLERS = {
 # Each message has a 'type' field, which allows the decoding class to be
 # identified in RECV_HANDLERS.
 
-def send_message(message, sock):
-    """
-    Sends a message over a socket, transforming it into JSON first.
-    """
-    as_json = json.dumps(message.serialize())
-    json_bytes = as_json.encode('utf-8')
-
-    # Pack the length and the bytes-encoded body together, which need to be
-    # sent together.
-    unsent = struct.pack('>I', len(json_bytes))
-    unsent += json_bytes
-
-    while unsent:
-        sent_length = sock.send(unsent)
-        unsent = unsent[sent_length:]
-
-def nonblocking_recv(sock, size):
+def _nonblocking_recv(sock, size):
     """
     A non-blocking version of socket.recv() which avoids EAGAIN.
     """
@@ -308,18 +292,129 @@ def nonblocking_recv(sock, size):
         buffer += chunk
     return buffer
 
-def recv_message(sock):
+class ProtocolStreamSocket:
     """
-    Reads a dictionary from a socket.
+    A protocol socket is a wrapper for sockets which speaks the Jobmon 
+    protocol - it has only a few methods:
+
+     - send() reads a message from the socket
+     - recv() writes a message into the socket
+     - fileno() gets the file number of the socket
+     - close() closes the socket
     """
-    # First, read the 4-byte length header to know how long the body content
-    # should be.
-    length_header = nonblocking_recv(sock, 4)
-    (body_length,) = struct.unpack('>I', length_header)
+    def __init__(self, sock):
+        self.sock = sock
 
-    # Read in and decode the raw JSON into UTF-8
-    raw_json_body = nonblocking_recv(sock, body_length)
+    def send(self, message):
+        """
+        Sends a message over a socket, transforming it into JSON first.
+        """
+        as_json = json.dumps(message.serialize())
+        json_bytes = as_json.encode('utf-8')
 
-    json_body = raw_json_body.decode('utf-8')
-    json_data = json.loads(json_body)
-    return RECV_HANDLERS[json_data['type']].unserialize(json_data)
+        # Pack the length and the bytes-encoded body together, which need to be
+        # sent together.
+        unsent = struct.pack('>I', len(json_bytes))
+        unsent += json_bytes
+
+        while unsent:
+            sent_length = self.sock.send(unsent)
+            unsent = unsent[sent_length:]
+
+    def recv(self):
+        """
+        Reads a message from a socket.
+        """
+        # First, read the 4-byte length header to know how long the body content
+        # should be.
+        length_header = _nonblocking_recv(sock, 4)
+        (body_length,) = struct.unpack('>I', length_header)
+
+        # Read in and decode the raw JSON into UTF-8
+        raw_json_body = _nonblocking_recv(sock, body_length)
+
+        json_body = raw_json_body.decode('utf-8')
+        json_data = json.loads(json_body)
+        return RECV_HANDLERS[json_data['type']].unserialize(json_data)
+
+    def close(self):
+        self.sock.close()
+
+class ProtocoDatagramSocket:
+    """
+    This differs from ProtocolStreamSocket because this operates via datagram
+    sockets, but it does the same thing.
+
+    It has an extra attribute, called 'peer', which should be assigned before
+    you send a message.
+    """
+    BUFFER_SIZE = 500
+
+    def __init__(self, sock, peer):
+        self.sock = sock
+        self.peer = peer
+
+    def send(self, message):
+        """
+        Sends a message over a socket, transforming it into JSON first.
+        """
+        as_json = json.dumps(message.serialize())
+        json_bytes = as_json.encode('utf-8')
+
+        to_send = struct.pack('>I', len(json_bytes))
+        to_send += json_bytes
+
+        self.sock.sendto(to_send, self.peer)
+
+    def recv(self):
+        """
+        Reads a message from a socket, and returns a tuple containing
+        both the message, and the peer's address.
+        """
+        datagram, peer = self.sock.recvfrom(self.BUFFER_SIZE)
+        length_header = datagram[:4]
+        (body_length,) = struct.unpack('>I', length_header)
+
+        raw_json_body = datagram[4:4 + length_header]
+
+        json_body = raw_json_body.decode('utf-8')
+        json_data = json.loads(json_body)
+        return RECV_HANDLERS[json_data['type']].unserialize(json_data)
+
+    def close(self):
+        self.sock.close()
+
+class ProtocolFile:
+    """
+    Similar to a protocol socket, but this works with file handles instead.
+    """
+    def __init__(self, fobj):
+        self.fobj = fobj
+
+    def send(self, message):
+        """
+        Sends a message over a socket, transforming it into JSON first.
+        """
+        as_json = json.dumps(message.serialize())
+        json_bytes = as_json.encode('utf-8')
+
+        to_send = struct.pack('>I', len(json_bytes))
+        to_send += json_bytes
+
+        self.fobj.write(to_send)
+
+    def recv(self):
+        """
+        Reads a message from a socket, and returns it.
+        """
+        length_header = self.fobj.read(4)
+        (body_length,) = struct.unpack('>I', length_header)
+
+        raw_json_body = self.fobj.read(body_length)
+
+        json_body = raw_json_body.decode('utf-8')
+        json_data = json.loads(json_body)
+        return RECV_HANDLERS[json_data['type']].unserialize(json_data)
+
+    def close(self):
+        self.fobj.close()
