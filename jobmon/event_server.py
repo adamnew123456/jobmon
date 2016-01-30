@@ -15,9 +15,12 @@ class EventServer(threading.Thread):
     events to them as they come in from the supervisor.
     """
     def __init__(self, port):
+        super().__init__()
+
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.bind(('localhost', port))
-        self.sock.accept(10)
+        self.sock.listen(10)
 
         # Since we can't really select on queues, pipes are the next best
         # option
@@ -35,36 +38,38 @@ class EventServer(threading.Thread):
         self.pollster.register(self.sock, selectors.EVENT_READ)
         self.pollster.register(self.bridge_in, selectors.EVENT_READ)
 
-        clients = []
-        while True:
+
+        done = False
+        clients = set()
+        while not done:
             events = self.pollster.select()
 
             for key, event in events:
-                if key.fobj == self.sock:
-                    client, _ = self.sock.accept()
-                    self.pollster.register(
-                            protocol.ProtocolSocketSocket(client),
-                            selectors.EVENT_READ)
+                if key.fileobj == self.sock:
+                    _client, _ = self.sock.accept()
+                    client = protocol.ProtocolStreamSocket(_client)
 
-                elif key.fobj == self.bridge_in:
+                    self.pollster.register(client, selectors.EVENT_READ)
+                    clients.add(client)
+                elif key.fileobj == self.bridge_in:
                     msg = self.bridge_in.recv()
+
                     for client in clients:
                         client.send(msg)
 
                     if msg.event_code == protocol.EVENT_TERMINATE:
-                        break
-
+                        done = True
                 else:
-                    self.pollster.unregister(key.fobj)
-                    clients.remove(key.fobj)
+                    self.pollster.unregister(key.fileobj)
+                    clients.remove(key.fileobj)
 
-        for client in self.clients:
+        for client in clients:
             client.close()
 
         self.bridge_in.close()
         self.bridge_out.close()
         self.sock.close()
-
+        
         self.exit_notify.set()
 
     def send(self, job, event_type):
@@ -74,7 +79,12 @@ class EventServer(threading.Thread):
         self.bridge_out.send(protocol.Event(job, event_type))
 
     def terminate(self):
-        self.bridge_out.send(protocol.Event('', protocol.EVENT_TERMINATE))
+        try:
+            self.bridge_out.send(protocol.Event('', protocol.EVENT_TERMINATE))
+        except ValueError:
+            # If the bridge is closed, then ignore any errors from tha
+            pass
+
         self.exit_notify.wait()
 
     def wait_for_exit(self):
