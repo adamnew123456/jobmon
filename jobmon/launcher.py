@@ -14,7 +14,9 @@ import logging
 import os
 import sys
 
-from jobmon import config, daemon, service
+from jobmon import (
+    config, daemon, service, command_server, event_server, status_server, restarts
+)
 
 # Make sure that we get console logging before the supervisor becomes a
 # daemon, so if any errors occur before that, they can be seen
@@ -31,15 +33,10 @@ def run(config_handler, as_daemon=True):
     parent process will exit. If ``False``, then this will launch a daemon but \
     the parent process will continue.
     """
-    supervisor = service.Supervisor(config_handler.jobs, 
-                                    config_handler.control_dir,
-                                    config_handler.autostarts,
-                                    config_handler.restarts)
-
     supervisor_wrapper = SupervisorDaemon(
         home_dir=config_handler.working_dir,
         kill_parent=as_daemon)
-    supervisor_wrapper.start(supervisor, config_handler)
+    supervisor_wrapper.start(config_handler)
 
 class SupervisorDaemon(daemon.Daemon):
     def run(self, supervisor, config_handler):
@@ -62,7 +59,26 @@ class SupervisorDaemon(daemon.Daemon):
         # Read the jobs and start up the supervisor, and then make sure to
         # die if we exit
         try:
-            supervisor.run()
+            events = event_server.EventServer(config_handler.event_port)
+            supervisor = service.Supervisor(events)
+
+            commands = command_server.CommandServer(
+                config_handler.control_port, supervisor)
+
+            status = status_server.StatusServer(supervisor)
+            restart_svr = restarts.RestartManager(config_handler.control_port, config_handler.event_port)
+
+            event.start()
+            commands.start()
+            status.start()
+            restart_svr.start()
+
+            try:
+                events.wait_for_exit()
+            finally:
+                event.terminate()
+                commands.terminate()
+                status.terminate()
         except Exception:
             logging.error('Supervisor died', exc_info=True)
         finally:
