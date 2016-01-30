@@ -124,7 +124,7 @@ def main():
     """
     Invokes different tools, depending upon what arguments are passed in.
     """
-    control_dir = os.environ.get('JOBMON_CONTROL_DIR', '')
+    control_port, event_port = os.environ.get('JOBMON_PORT', ',').split(',')
     
     parser = load_arg_parser()
     args = parser.parse_args(sys.argv[1:])
@@ -151,34 +151,25 @@ def main():
             print('Error parsing configuration file:', str(parse_error),
                   file=sys.stderr)
             return -1
-        except OSError as file_err:
-            # Failure to read the file - in this case, print out the error
-            # and quit
-            print('Could not read configuration file:', 
-                  os.strerror(file_err.errno), file=sys.stderr)
-            return -1
         except Exception as ex:
             traceback.print_exc(file=sys.stderr)
             return -1
 
         # Print out the control directory so that the user knows what to set
         # JOBMON_CONTROL_DIR to
-        control_dir = os.path.abspath(config_handler.control_dir)
-        print(control_dir)
+        print(config_handler.control_port, ',', config_handler.event_port, sep='')
 
         launcher.run(config_handler)
     elif args.command == 'start':
         # Establish a connection to the job service, and start the job.
         try:
-            command_pipe = transport.CommandPipe(control_dir)
+            command_pipe = transport.CommandPipe(int(control_port))
             command_pipe.start_job(args.JOB)
+        except ValueError:
+            print('Invalid control port:', control_port)
+            return 1
         except IOError:
             print('Server dropped our connection.',
-                  file=sys.stderr)
-            return 1
-        except OSError as err:
-            print(os.strerror(err.errno),
-                    'Is $JOBMON_CONTROL_DIR set?',
                   file=sys.stderr)
             return 1
         except NameError:
@@ -192,15 +183,13 @@ def main():
     elif args.command == 'stop':
         # Establish a connection to the job service, and stop the job.
         try:
-            command_pipe = transport.CommandPipe(control_dir)
+            command_pipe = transport.CommandPipe(int(control_port))
             command_pipe.stop_job(args.JOB)
+        except ValueError:
+            print('Invalid control port:', control_port)
+            return 1
         except IOError:
             print('Server dropped our connection.',
-                  file=sys.stderr)
-            return 1
-        except OSError as err:
-            print(os.strerror(err.errno),
-                    'Is $JOBMON_CONTROL_DIR set?',
                   file=sys.stderr)
             return 1
         except NameError:
@@ -215,29 +204,27 @@ def main():
         # Query the status of the job, and modify our return code depending
         # on what the job is doing.
         try:
-            command_pipe = transport.CommandPipe(control_dir)
+            command_pipe = transport.CommandPipe(int(control_port))
             running = command_pipe.is_running(args.JOB)
 
             return 0 if running else 1
+        except ValueError:
+            print('Invalid control port:', control_port)
+            return -1
         except IOError:
             print('Server dropped our connection.',
                   file=sys.stderr)
-            return 2
-        except OSError as err:
-            print(os.strerror(err.errno),
-                    'Is $JOBMON_CONTROL_DIR set?',
-                  file=sys.stderr)
-            return 2
+            return -1
         except NameError:
             print('That job does not exist', file=sys.stderr)
-            return 2
+            return -1
         except transport.JobError as job_err:
             print(str(job_err), file=sys.stderr)
-            return 2
+            return -1
     elif args.command == 'list-jobs':
         # Get all the jobs and print them in the specified format
         try:
-            command_pipe = transport.CommandPipe(control_dir)
+            command_pipe = transport.CommandPipe(int(control_port))
             jobs = command_pipe.get_jobs()
 
             for job_name, status in jobs.items():
@@ -246,13 +233,11 @@ def main():
                 else:
                     print('STOPPED', job_name)
             return 0
+        except ValueError:
+            print('Invalid control port:', control_port)
+            return 1
         except IOError:
             print('Server dropped our connection.',
-                  file=sys.stderr)
-            return 1
-        except OSError as err:
-            print(os.strerror(err.errno),
-                    'Is $JOBMON_CONTROL_DIR set?',
                   file=sys.stderr)
             return 1
         except transport.JobError as job_err:
@@ -260,21 +245,19 @@ def main():
             return 1
     elif args.command == 'terminate':
         try:
-            command_pipe = transport.CommandPipe(control_dir)
+            command_pipe = transport.CommandPipe(int(control_port))
             command_pipe.terminate()
             return 0
+        except ValueError:
+            print('Invalid control port:', control_port)
+            return 1
         except IOError:
             print('Server dropped our connection.',
                   file=sys.stderr)
             return 1
-        except OSError as err:
-            print(os.strerror(err.errno),
-                    'Is $JOBMON_CONTROL_DIR set?',
-                  file=sys.stderr)
-            return 1
     elif args.command == 'listen':
         try:    
-            event_stream = transport.EventStream(control_dir)
+            event_stream = transport.EventStream(int(event_port))
            
             if args.NUM_EVENTS <= 0:
                 events_to_go = float('inf')
@@ -297,6 +280,9 @@ def main():
                 events_to_go -= 1
 
             return 0
+        except ValueError:
+            print('Invalid event port:', event_port)
+            return 1
         except BrokenPipeError:
             # This could be a normal result if we're being piped through less
             # with an infinite number
@@ -305,31 +291,24 @@ def main():
             print('Server dropped our connection.',
                   file=sys.stderr)
             return 1
-        except OSError as err:
-            print(os.strerror(err.errno),
-                    'Is $JOBMON_CONTROL_DIR set?',
-                  file=sys.stderr)
-            return 1
     elif args.command == 'wait':
         try:
-            event_stream = transport.EventStream(control_dir)
+            event_stream = transport.EventStream(int(event_port))
             job = args.JOB
 
             while events_to_go > 0:
                 evt = event_stream.next_event()
                 if evt.job_name == job:
                     break
+        except ValueError:
+            print('Invalid event port:', event_port)
+            return 1
         except BrokenPipeError:
             # This could be a normal result if we're being piped through less
             # with an infinite number
             return 0
         except IOError:
             print('Server dropped our connection.',
-                  file=sys.stderr)
-            return 1
-        except OSError as err:
-            print(os.strerror(err.errno),
-                    'Is $JOBMON_CONTROL_DIR set?',
                   file=sys.stderr)
             return 1
     else:
