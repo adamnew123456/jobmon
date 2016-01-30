@@ -57,8 +57,8 @@ class ConfigHandler:
     - :attr:`jobs` maps each job name to a 
       :class:`jobmon.monitor.ChlidProcesSkeleton`.
     - :attr:`working_dir` stores the supervisor's working directory.
-    - :attr:`control_dir` stores the path where the supervisor will put its
-      command sockets.
+    - :attr:`control_port` stores the port number which is used for commands.
+    - :attr:`event_port` stores the port number which is used for events.
     - :attr:`log_level` stores the logging level for the supervisor's logging
       output.
     - :attr:`log_file` stores the path where the supervisor's logging output
@@ -71,7 +71,8 @@ class ConfigHandler:
         self.logger = logging.getLogger('config')
 
         self.working_dir = '.'
-        self.control_dir = '.'
+        self.control_port = 6666
+        self.event_port = 6667
         self.includes = []
         self.log_level = logging.WARNING
         self.log_file = '/dev/null'
@@ -135,10 +136,13 @@ class ConfigHandler:
                     self.read_type(supervisor_map, 'working-dir', str, 
                                    self.working_dir))
 
-        if 'control-dir' in supervisor_map:
-            self.control_dir = expand_path_vars(
-                    self.read_type(supervisor_map, 'control-dir', str, 
-                                   self.control_dir))
+        if 'control-port' in supervisor_map:
+            self.control_port = self.read_type(supervisor_map, 'control-port', int, 
+                                   self.control_port))
+
+        if 'event-port' in supervisor_map:
+            self.event_port = self.read_type(supervisor_map, 'control-port', int, 
+                                   self.event_port))
 
         if 'include-dirs' in supervisor_map:
             self.includes = self.read_type(supervisor_map, 'include-dirs', 
