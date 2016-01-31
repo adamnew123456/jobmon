@@ -1,12 +1,15 @@
 """
 The command server accepts connections and dispatches commands to the service.
 """
+import logging
 import os
 import select
 import socket
 import threading
 
 from jobmon import protocol, util
+
+LOGGER = logging.getLogger('jobmon.command_server')
 
 class CommandServer(threading.Thread, util.TerminableThreadMixin):
     """
@@ -44,9 +47,12 @@ class CommandServer(threading.Thread, util.TerminableThreadMixin):
             if self.sock in readers:
                 _client, _ = self.sock.accept()
                 client = protocol.ProtocolStreamSocket(_client)
+                LOGGER.debug('Accepted client')
 
                 message = client.recv()
                 method = method_dict[message.command_code]
+
+                LOGGER.debug('Received message %s', message)
 
                 if message.command_code in (protocol.CMD_JOB_LIST, 
                                             protocol.CMD_QUIT):
@@ -54,9 +60,11 @@ class CommandServer(threading.Thread, util.TerminableThreadMixin):
                 else:
                     result = method(message.job_name)
 
+                LOGGER.debug('Got result from supervisor: %s', result)
                 if result is not None:
                     client.send(result)
 
+                LOGGER.debug('Closing client')
                 client.close()
 
                 if message.command_code == protocol.CMD_QUIT:
@@ -64,6 +72,8 @@ class CommandServer(threading.Thread, util.TerminableThreadMixin):
 
             if self.exit_reader in readers:
                 break
+
+        LOGGER.debug('Closing...')
 
         self.sock.close()
         self.cleanup()

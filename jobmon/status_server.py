@@ -2,12 +2,15 @@
 This waits for status updates notifies the supervisor the status of the
 children changes.
 """
+import logging
 import os
 import select
 import socket
 import threading
 
 from jobmon import protocol, util
+
+LOGGING = logging.getLogger('jobmon.status_server')
 
 class StatusServer(threading.Thread, util.TerminableThreadMixin):
     """
@@ -42,12 +45,15 @@ class StatusServer(threading.Thread, util.TerminableThreadMixin):
 
             if self.sock in readers:
                 message = self.sock.recv()
+                LOGGING.info('Received message: %s', message)
+
                 if message.event_code == protocol.EVENT_STARTJOB:
                     self.supervisor.process_start(message.job_name) ## TODO
                 elif message.event_code == protocol.EVENT_STOPJOB:
                     self.supervisor.process_stop(message.job_name) ## TODO
 
             if self.exit_reader in readers:
+                LOGGING.info('Closing...')
                 break
             
         self.sock.close()

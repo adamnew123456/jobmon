@@ -2,12 +2,15 @@
 The event server is responsible for dispatching events from the supervisor
 to clients waiting for them.
 """
+import logging
 import os
 import selectors
 import socket
 import threading
 
 from jobmon import protocol
+
+LOGGING = logging.getLogger('jobmon.event_server')
 
 class EventServer(threading.Thread):
     """
@@ -46,6 +49,8 @@ class EventServer(threading.Thread):
 
             for key, event in events:
                 if key.fileobj == self.sock:
+                    LOGGING.debug('Client connected')
+
                     _client, _ = self.sock.accept()
                     client = protocol.ProtocolStreamSocket(_client)
 
@@ -53,6 +58,9 @@ class EventServer(threading.Thread):
                     clients.add(client)
                 elif key.fileobj == self.bridge_in:
                     msg = self.bridge_in.recv()
+                    LOGGING.debug('Reporting %s to %d clients', 
+                            msg,
+                            len(clients))
 
                     for client in clients:
                         client.send(msg)
@@ -60,9 +68,12 @@ class EventServer(threading.Thread):
                     if msg.event_code == protocol.EVENT_TERMINATE:
                         done = True
                 else:
+                    LOGGING.debug('Client disconnected')
+
                     self.pollster.unregister(key.fileobj)
                     clients.remove(key.fileobj)
 
+        LOGGING.info('Closing...')
         for client in clients:
             client.close()
 
@@ -76,13 +87,16 @@ class EventServer(threading.Thread):
         """
         Sends out an event to all waiting clients.
         """
+        LOGGING.debug('Pumping event[%s] about job %s', 
+                protocol.Event.EVENT_NAMES[event_type],
+                job)
+
         self.bridge_out.send(protocol.Event(job, event_type))
 
     def terminate(self):
         try:
             self.bridge_out.send(protocol.Event('', protocol.EVENT_TERMINATE))
         except ValueError:
-            # If the bridge is closed, then ignore any errors from tha
             pass
 
         self.exit_notify.wait()
