@@ -15,11 +15,13 @@ class StatusServer(threading.Thread):
     commands over to the supervisor.
     """
     def __init__(self, supervisor):
+        super().__init__()
+
         self.supervisor = supervisor
 
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.bind(('localhost', 0))
-        self.sock = protocol.ProtocolDatagramSocket(self.sock, None)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind(('localhost', 0))
+        self.sock = protocol.ProtocolDatagramSocket(sock, None)
 
         reader, writer = os.pipe()
         self.exit_in = os.fdopen(reader, 'rb')
@@ -44,7 +46,7 @@ class StatusServer(threading.Thread):
             readers, _, _ = select.select([self.sock, self.exit_in], [], [])
 
             if self.sock in readers:
-                message, _ = self.sock.recv()
+                message = self.sock.recv()
                 if message.event_code == protocol.EVENT_STARTJOB:
                     self.supervisor.process_start(message.job_name) ## TODO
                 elif message.event_code == protocol.EVENT_STOPJOB:
@@ -61,4 +63,6 @@ class StatusServer(threading.Thread):
 
     def terminate(self):
         self.exit_out.write(b' ')
+        self.exit_out.flush()
+
         self.exit_notify.wait()
