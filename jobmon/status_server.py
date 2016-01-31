@@ -7,27 +7,22 @@ import select
 import socket
 import threading
 
-from jobmon import protocol
+from jobmon import protocol, util
 
-class StatusServer(threading.Thread):
+class StatusServer(threading.Thread, util.TerminableThreadMixin):
     """
     The status server accepts updates from the child processes, and passes
     commands over to the supervisor.
     """
     def __init__(self, supervisor):
-        super().__init__()
+        threading.Thread.__init__(self)
+        util.TerminableThreadMixin.__init__(self)
 
         self.supervisor = supervisor
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind(('localhost', 0))
         self.sock = protocol.ProtocolDatagramSocket(sock, None)
-
-        reader, writer = os.pipe()
-        self.exit_in = os.fdopen(reader, 'rb')
-        self.exit_out = os.fdopen(writer, 'wb')
-
-        self.exit_notify = threading.Event()
 
     def get_peer(self):
         """
@@ -43,7 +38,7 @@ class StatusServer(threading.Thread):
         supervisor.
         """
         while True:
-            readers, _, _ = select.select([self.sock, self.exit_in], [], [])
+            readers, _, _ = select.select([self.sock, self.exit_reader], [], [])
 
             if self.sock in readers:
                 message = self.sock.recv()
@@ -52,17 +47,8 @@ class StatusServer(threading.Thread):
                 elif message.event_code == protocol.EVENT_STOPJOB:
                     self.supervisor.process_stop(message.job_name) ## TODO
 
-            if self.exit_in in readers:
+            if self.exit_reader in readers:
                 break
             
-        self.exit_in.close()
-        self.exit_out.close()
         self.sock.close()
-
-        self.exit_notify.set()
-
-    def terminate(self):
-        self.exit_out.write(b' ')
-        self.exit_out.flush()
-
-        self.exit_notify.wait()
+        self.cleanup()

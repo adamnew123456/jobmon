@@ -6,16 +6,17 @@ import select
 import socket
 import threading
 
-from jobmon import protocol
+from jobmon import protocol, util
 
-class CommandServer(threading.Thread):
+class CommandServer(threading.Thread, util.TerminableThreadMixin):
     """
     The command server manages a server and a collection of clients,
     calls into the supervisor when a command comes in, and sends the
     response back to the sender.
     """
     def __init__(self, port, supervisor):
-        super().__init__()
+        threading.Thread.__init__(self)
+        util.TerminableThreadMixin.__init__(self)
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -23,13 +24,6 @@ class CommandServer(threading.Thread):
         self.sock.listen(10)
 
         self.supervisor = supervisor
-
-        # Used to notify the worker thread that it needs to stop
-        reader, writer = os.pipe()
-        self.exit_in = os.fdopen(reader, 'rb')
-        self.exit_out = os.fdopen(writer, 'wb')
-
-        self.exit_notify = threading.Event()
 
     def run(self):
         """
@@ -45,7 +39,7 @@ class CommandServer(threading.Thread):
         }
 
         while True:
-            readers, _, _ = select.select([self.sock, self.exit_in], [], [])
+            readers, _, _ = select.select([self.sock, self.exit_reader], [], [])
 
             if self.sock in readers:
                 _client, _ = self.sock.accept()
@@ -68,30 +62,8 @@ class CommandServer(threading.Thread):
                 if message.command_code == protocol.CMD_QUIT:
                     break
 
-            if self.exit_in in readers:
+            if self.exit_reader in readers:
                 break
 
-        # During testing, this would close too quickly sometimes, but I'm not
-        # sure why. It doesn't affect anything if it's already closed, though
-        try:
-            self.exit_in.close()
-        except OSError:
-            pass
-        
-        try:
-            self.exit_out.close()
-        except OSError:
-            pass
-
         self.sock.close()
-
-        self.exit_notify.set()
-
-    def terminate(self):
-        try:
-            self.exit_out.write(b' ')
-            self.exit_out.flush()
-        except ValueError:
-            pass
-
-        self.exit_notify.wait()
+        self.cleanup()
