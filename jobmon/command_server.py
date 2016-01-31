@@ -1,6 +1,7 @@
 """
 The command server accepts connections and dispatches commands to the service.
 """
+import os
 import select
 import socket
 import threading
@@ -14,9 +15,12 @@ class CommandServer(threading.Thread):
     response back to the sender.
     """
     def __init__(self, port, supervisor):
+        super().__init__()
+
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.bind(('localhost', port))
-        self.sock.accept(10)
+        self.sock.listen(10)
 
         self.supervisor = supervisor
 
@@ -44,28 +48,50 @@ class CommandServer(threading.Thread):
             readers, _, _ = select.select([self.sock, self.exit_in], [], [])
 
             if self.sock in readers:
-                client, _ = self.sock.accept()
-                client = protocol.ProtocolStreamSocket(client)
+                _client, _ = self.sock.accept()
+                client = protocol.ProtocolStreamSocket(_client)
 
                 message = client.recv()
                 method = method_dict[message.command_code]
-                result = method(message.job_name)
 
-                client.send(result)
+                if message.command_code in (protocol.CMD_JOB_LIST, 
+                                            protocol.CMD_QUIT):
+                    result = method()
+                else:
+                    result = method(message.job_name)
+
+                if result is not None:
+                    client.send(result)
+
                 client.close()
 
-                if command_code == protocol.CMD_QUIT:
+                if message.command_code == protocol.CMD_QUIT:
                     break
 
             if self.exit_in in readers:
                 break
 
-        self.exit_in.close()
-        self.exit_out.close()
+        # During testing, this would close too quickly sometimes, but I'm not
+        # sure why. It doesn't affect anything if it's already closed, though
+        try:
+            self.exit_in.close()
+        except OSError:
+            pass
+        
+        try:
+            self.exit_out.close()
+        except OSError:
+            pass
+
         self.sock.close()
 
         self.exit_notify.set()
 
     def terminate(self):
-        self.exit_out.write(b' ')
+        try:
+            self.exit_out.write(b' ')
+            self.exit_out.flush()
+        except ValueError:
+            pass
+
         self.exit_notify.wait()

@@ -233,6 +233,8 @@ class JobListResponse(namedtuple('JobListResponse', ['all_jobs'])):
             else:
                 buffer += '\n - {} is STOPPED'.format(job_name)
 
+        return buffer
+
     __repr__ = __str__
 
     def serialize(self):

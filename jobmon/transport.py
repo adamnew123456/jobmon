@@ -90,7 +90,7 @@ class CommandPipe:
 
         This is necessary because the server drops us after a single request.
         """
-        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             self.sock.connect(('localhost', self.port))
             self.sock = protocol.ProtocolStreamSocket(self.sock)
