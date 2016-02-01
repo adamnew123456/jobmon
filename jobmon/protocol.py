@@ -29,9 +29,6 @@ protocol. These are:
 """
 from collections import namedtuple
 import json
-import os
-import select
-import socket
 import struct
 
 # Constants for denoting event codes
@@ -166,7 +163,7 @@ class SuccessResponse(namedtuple('SuccessResponse', ['job_name'])):
 
 class FailureResponse(namedtuple('FailureResponse', ['job_name', 'reason'])):
     def __str__(self):
-        return 'Failure[{}: {}]'.format(reason_to_str(reason),
+        return 'Failure[{}: {}]'.format(reason_to_str(self.reason),
                                         self.job_name)
 
     __repr__ =  __str__
@@ -312,15 +309,18 @@ class ProtocolStreamSocket:
         """
         # First, read the 4-byte length header to know how long the body content
         # should be.
-        length_header = self.sock.recv(4)
-        (body_length,) = struct.unpack('>I', length_header)
+        try:
+            length_header = self.sock.recv(4)
+            (body_length,) = struct.unpack('>I', length_header)
 
-        # Read in and decode the raw JSON into UTF-8
-        raw_json_body = self.sock.recv(body_length)
+            # Read in and decode the raw JSON into UTF-8
+            raw_json_body = self.sock.recv(body_length)
 
-        json_body = raw_json_body.decode('utf-8')
-        json_data = json.loads(json_body)
-        return RECV_HANDLERS[json_data['type']].unserialize(json_data)
+            json_body = raw_json_body.decode('utf-8')
+            json_data = json.loads(json_body)
+            return RECV_HANDLERS[json_data['type']].unserialize(json_data)
+        except struct.error:
+            raise ValueError('Incomplete message received')
 
     def close(self):
         self.sock.close()
@@ -359,7 +359,7 @@ class ProtocolDatagramSocket:
         Reads a message from a socket, and returns a tuple containing
         both the message, and the peer's address.
         """
-        datagram, peer = self.sock.recvfrom(self.BUFFER_SIZE)
+        datagram, _ = self.sock.recvfrom(self.BUFFER_SIZE)
         length_header = datagram[:4]
         (body_length,) = struct.unpack('>I', length_header)
 

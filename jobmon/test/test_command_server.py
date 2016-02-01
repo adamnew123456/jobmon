@@ -73,3 +73,5 @@ class TestCommandServer(unittest.TestCase):
         finally:
             command_svr.terminate()
             command_pipe.destroy()
+
+            command_svr.wait_for_exit()

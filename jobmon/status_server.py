@@ -3,14 +3,13 @@ This waits for status updates notifies the supervisor the status of the
 children changes.
 """
 import logging
-import os
 import select
 import socket
 import threading
 
 from jobmon import protocol, util
 
-LOGGING = logging.getLogger('jobmon.status_server')
+LOGGER = logging.getLogger('jobmon.status_server')
 
 class StatusServer(threading.Thread, util.TerminableThreadMixin):
     """
@@ -19,11 +18,14 @@ class StatusServer(threading.Thread, util.TerminableThreadMixin):
     """
     def __init__(self, supervisor):
         threading.Thread.__init__(self)
+        self.daemon = True
+
         util.TerminableThreadMixin.__init__(self)
 
         self.supervisor = supervisor
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setblocking(False)
         sock.bind(('localhost', 0))
         self.sock = protocol.ProtocolDatagramSocket(sock, None)
 
@@ -43,18 +45,19 @@ class StatusServer(threading.Thread, util.TerminableThreadMixin):
         while True:
             readers, _, _ = select.select([self.sock, self.exit_reader], [], [])
 
+            if self.exit_reader in readers:
+                break
+
             if self.sock in readers:
+                LOGGER.info('Retrieving message...')
                 message = self.sock.recv()
-                LOGGING.info('Received message: %s', message)
+                LOGGER.info('Received message: %s', message)
 
                 if message.event_code == protocol.EVENT_STARTJOB:
-                    self.supervisor.process_start(message.job_name) ## TODO
+                    self.supervisor.process_start(message.job_name)
                 elif message.event_code == protocol.EVENT_STOPJOB:
-                    self.supervisor.process_stop(message.job_name) ## TODO
-
-            if self.exit_reader in readers:
-                LOGGING.info('Closing...')
-                break
+                    self.supervisor.process_stop(message.job_name)
             
-        self.sock.close()
+        LOGGER.info('Closing...')
         self.cleanup()
+        self.sock.close()

@@ -26,10 +26,18 @@ class TerminableThreadMixin:
         self.exit_notify.set()
 
     def terminate(self):
+        """
+        Asynchronously terminates the thread, without waiting for it to exit.
+        """
         try:
             self.exit_writer.write(b' ')
             self.exit_writer.flush()
         except ValueError:
             pass
 
+    def wait_for_exit(self):
+        """
+        Waits for the thread to exit - should be run only after terminating
+        the thread.
+        """
         self.exit_notify.wait()

@@ -26,6 +26,7 @@ class TestTicker(unittest.TestCase):
             self.assertEqual(listener.events, ['a', 'b', 'c'])
         finally:
             ticks.terminate()
+            ticks.wait_for_exit()
 
     def test_ticker_unregister(self):
         listener = TickListener()
@@ -44,3 +45,4 @@ class TestTicker(unittest.TestCase):
             self.assertEqual(listener.events, ['a', 'c'])
         finally:
             ticks.terminate()
+            ticks.wait_for_exit()

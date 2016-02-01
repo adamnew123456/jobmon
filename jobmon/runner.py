@@ -151,7 +151,7 @@ def main():
             print('Error parsing configuration file:', str(parse_error),
                   file=sys.stderr)
             return -1
-        except Exception as ex:
+        except Exception:
             traceback.print_exc(file=sys.stderr)
             return -1
 
@@ -265,7 +265,12 @@ def main():
                 events_to_go = args.NUM_EVENTS
 
             while events_to_go > 0:
-                evt = event_stream.next_event()
+                try:
+                    evt = event_stream.next_event()
+                except ValueError:
+                    # The server died, and didn't send us a compelte
+                    # response back
+                    break
                 
                 if evt.event_code == protocol.EVENT_STARTJOB:
                     print('RUNNING', evt.job_name)
@@ -296,9 +301,14 @@ def main():
             event_stream = transport.EventStream(int(event_port))
             job = args.JOB
 
-            while events_to_go > 0:
-                evt = event_stream.next_event()
-                if evt.job_name == job:
+            while True:
+                try:
+                    evt = event_stream.next_event()
+                    if evt.job_name == job:
+                        break
+                except ValueError:
+                    # The server died, and didn't send us a compelte
+                    # response back
                     break
         except ValueError:
             print('Invalid event port:', event_port)

@@ -40,5 +40,7 @@ class TestCommandServer(unittest.TestCase):
                     [('started', 'some_job'),
                      ('stopped', 'some_job')])
         finally:
-            status_peer.close()
             status_svr.terminate()
+            status_peer.close()
+
+            status_svr.wait_for_exit()

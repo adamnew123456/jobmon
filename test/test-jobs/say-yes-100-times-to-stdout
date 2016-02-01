@@ -1,4 +1,0 @@
-#!/bin/sh
-for n in $(seq 100); do
-    echo "yes"
-done

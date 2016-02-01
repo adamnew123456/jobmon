@@ -50,7 +50,8 @@ Here is an example of a master configuration::
         "supervisor":
         {
             "working-dir": ".",
-            "control-dir": "$TMP/supervisor",
+            "command-port": 6666,
+            "event-port": 6667,
             "include-dirs": [
                 "jobs/*.json"
             ],
@@ -68,8 +69,10 @@ Each part of the supervisor configuration is described below:
 - ``working-dir`` sets the working directory for the supervisor daemon. This
   can be useful if the paths used in the configuration file are relative
   paths. The default is not to change the working directory (i.e. use ``.``).
-- ``control-dir`` sets the location where the UNIX sockets for events and
-  commands are located. The default is ``.`` (the current directory).
+- ``command-port`` sets the TCP port over which JobMon accepts commands. By
+  default, it is the port 6666.
+- ``event-port`` sets the TCP port over which JobMon will dispatch events. By
+  default, it is the port 6667.
 - ``include-dirs`` is a list of globs, each of which should reference a list
   of job files to include. The default is that no files are included.
 - ``log-file`` is the path to the daemon's logs. Note that file is appended
@@ -90,9 +93,9 @@ Each part of the supervisor configuration is described below:
   - ``ERROR`` prints out serious error messages.
   - ``CRITICAL`` prints out messages which are extremely important.
 
-Note that ``working-dir``, ``control-dir``, ``include-dirs`` and ``log-file``
-will expand shell variables using the traditional ``$NAME`` syntax. Note
-that ``$$`` escapes into a single ``$``.
+Note that ``working-dir``, ``include-dirs`` and ``log-file`` will expand 
+shell variables using the traditional ``$NAME`` syntax. Note that ``$$`` 
+escapes into a single ``$``.
 
 Job Files
 ~~~~~~~~~
@@ -161,13 +164,12 @@ interface to the capabilities of JobMon. The tool's internal documentation
 can be viewed by calling ``jobmon help``.
 
 The first thing to remember about the command line tool is the special
-environment variable called ``$JOBMON_CONTROL_DIR``. This variable *must* be
+environment variable called ``$JOBMON_PORT``. This variable *must* be
 set if you are using any subcommand which is not ``help`` or ``daemon``; this
-is because it is used to store the control directory (where the UNIX sockets 
-are stored). The initial value can be obtained as follows::
+is because it is used to store the command and event sockets::
 
     # When starting the daemon...
-    $ export JOBMON_CONTROL_DIR=`jobmon daemon CONFIG`
+    $ export JOBMON_PORT=`jobmon daemon CONFIG`
 
 As a general rule, note that any command (other than ``status``) will return
 0 on success and nonzero on failure (and will also print a message on
@@ -190,6 +192,10 @@ stopped. ``jobmon listen`` might produce the following event stream::
     RUNNNIG Job B
     STOPPED Job B
 
+Finally, the ``jobmon wait``  command will wait until the given job has 
+changed status. To find out what the status is afterwords, run 
+``jobmon status``, since ``jobmon wait`` does not print out anything.
+
 Installation
 ------------
 
@@ -201,17 +207,10 @@ Unit Tests
 ----------
 
 JobMon is currently tested, although not completely (and the tests could
-probably be a bit neater too). The easiest way to run a single test is to
-do::
+probably be a bit neater too). To run a test, use the unittest module's
+automatic test discovery::
 
-    $ ./run-tests.sh [TEST]
-    # For example, to run the configuration handler test
-    $ ./run-tests.sh test_config
-    # Or, to run the entire test suite
-    $ ./run-tests.sh
-
-where ``TEST`` is the name of a file (without the ``.py`` extension) of the
-test to run under ``test/tests``.
+    $ python3 -m unittest
 
 Misc. Info
 ----------

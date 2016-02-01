@@ -10,7 +10,7 @@ import threading
 
 from jobmon import protocol
 
-LOGGING = logging.getLogger('jobmon.event_server')
+LOGGER = logging.getLogger('jobmon.event_server')
 
 class EventServer(threading.Thread):
     """
@@ -20,6 +20,7 @@ class EventServer(threading.Thread):
     def __init__(self, port):
         super().__init__()
 
+        LOGGER.info('Binding events to localhost:%d', port)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.bind(('localhost', port))
@@ -37,28 +38,28 @@ class EventServer(threading.Thread):
         """
         Manages connections, and sends out events to waiting clients.
         """
-        self.pollster = selectors.DefaultSelector()
-        self.pollster.register(self.sock, selectors.EVENT_READ)
-        self.pollster.register(self.bridge_in, selectors.EVENT_READ)
+        pollster = selectors.DefaultSelector()
+        pollster.register(self.sock, selectors.EVENT_READ)
+        pollster.register(self.bridge_in, selectors.EVENT_READ)
 
 
         done = False
         clients = set()
         while not done:
-            events = self.pollster.select()
+            events = pollster.select()
 
-            for key, event in events:
+            for key, _ in events:
                 if key.fileobj == self.sock:
-                    LOGGING.debug('Client connected')
+                    LOGGER.info('Client connected')
 
                     _client, _ = self.sock.accept()
                     client = protocol.ProtocolStreamSocket(_client)
 
-                    self.pollster.register(client, selectors.EVENT_READ)
+                    pollster.register(client, selectors.EVENT_READ)
                     clients.add(client)
                 elif key.fileobj == self.bridge_in:
                     msg = self.bridge_in.recv()
-                    LOGGING.debug('Reporting %s to %d clients', 
+                    LOGGER.info('Reporting %s to %d clients', 
                             msg,
                             len(clients))
 
@@ -68,30 +69,33 @@ class EventServer(threading.Thread):
                     if msg.event_code == protocol.EVENT_TERMINATE:
                         done = True
                 else:
-                    LOGGING.debug('Client disconnected')
+                    LOGGER.info('Client disconnected')
 
-                    self.pollster.unregister(key.fileobj)
+                    pollster.unregister(key.fileobj)
                     clients.remove(key.fileobj)
 
-        LOGGING.info('Closing...')
+        LOGGER.info('Closing...')
+        self.exit_notify.set()
+
         for client in clients:
             client.close()
 
         self.bridge_in.close()
         self.bridge_out.close()
         self.sock.close()
-        
-        self.exit_notify.set()
 
     def send(self, job, event_type):
         """
         Sends out an event to all waiting clients.
         """
-        LOGGING.debug('Pumping event[%s] about job %s', 
+        LOGGER.info('Pumping event[%s] about job %s', 
                 protocol.Event.EVENT_NAMES[event_type],
                 job)
 
-        self.bridge_out.send(protocol.Event(job, event_type))
+        try:
+            self.bridge_out.send(protocol.Event(job, event_type))
+        except ValueError:
+            pass
 
     def terminate(self):
         try:
@@ -99,7 +103,7 @@ class EventServer(threading.Thread):
         except ValueError:
             pass
 
-        self.exit_notify.wait()
-
     def wait_for_exit(self):
+        LOGGER.info('Waiting on event to stop')
         self.exit_notify.wait()
+        LOGGER.info('Event finished')

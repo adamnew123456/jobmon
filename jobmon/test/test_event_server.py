@@ -38,3 +38,5 @@ class TestEventServer(unittest.TestCase):
             event_client_a.destroy()
             event_client_b.destroy()
             event_client_c.destroy()
+
+            event_srv.wait_for_exit()

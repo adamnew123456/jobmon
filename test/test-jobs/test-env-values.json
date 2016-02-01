@@ -1,8 +1,0 @@
-{
-    "env-values":
-    {
-        "command": "test-jobs/test-env-values",
-        "stdout": "/tmp/env-test",
-        "env": {"A": "a", "B": "b"}
-    }
-}

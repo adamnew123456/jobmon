@@ -1,6 +1,0 @@
-#!/bin/sh
-#
-# Make sure that we don't trip the timeout (which is 5 by default), otherwise
-# this job will be suspended for 15 seconds each time
-sleep 7
-exit

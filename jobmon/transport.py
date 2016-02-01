@@ -14,7 +14,6 @@ This is an object oriented layer on top of that low-level foundation.
   Clients submit requests to the supervisor, and then the supervisor does an
   action and returns a response back to the client.
 """
-import os.path
 import socket
 
 from jobmon import protocol
@@ -90,10 +89,10 @@ class CommandPipe:
 
         This is necessary because the server drops us after a single request.
         """
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        _sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            self.sock.connect(('localhost', self.port))
-            self.sock = protocol.ProtocolStreamSocket(self.sock)
+            _sock.connect(('localhost', self.port))
+            self.sock = protocol.ProtocolStreamSocket(_sock)
         except OSError:
             raise IOError('Cannot connect to supervisor')
 
@@ -132,9 +131,9 @@ class CommandPipe:
         self.reconnect()
         msg = protocol.Command(job_name, protocol.CMD_STOP)
         self.sock.send(msg)
-        result = self.sock.recv() 
-
         try:
+            result = self.sock.recv() 
+
             if isinstance(result, protocol.FailureResponse):
                 if result.reason == protocol.ERR_NO_SUCH_JOB:
                     raise NameError(

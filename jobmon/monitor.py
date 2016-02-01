@@ -16,16 +16,15 @@ The event queue (``THE_EVENT_QUEUE`` in the example) receives two kinds of
 events from the child process - :class:`ProcStart` indicates that a process has
 been started, while :class:`ProcStop` indicates that a process has stopped.
 """
-from collections import namedtuple
 import logging
 import os
-import select
 import signal
 import sys
 import threading
-import traceback
 
 from jobmon import protocol
+
+LOGGER = logging.getLogger('supervisor.child-process')
 
 class AtomicBox:
     """
@@ -74,7 +73,6 @@ class ChildProcess:
 
         self.config(**config)
 
-        self.logger = logging.getLogger('supervisor.child-process')
 
     def config(self, **config):
         """
@@ -125,6 +123,12 @@ class ChildProcess:
         child_pid = os.fork()
         if child_pid == 0:
             try:
+                # Create a new process group, so that we don't end up killing
+                # ourselves if we kill this child. (For some reason, doing this
+                # didn't always work when done in the child, so it is done in the
+                # parent).
+                os.setsid()
+
                 # Put the proper file descriptors in to replace the standard
                 # streams
                 stdin = open(self.stdin)
@@ -163,22 +167,18 @@ class ChildProcess:
                 os._exit(1)
         else:
             self.child_pid.set(child_pid)
-
-            # Create a new process group, so that we don't end up killing
-            # ourselves if we kill this child. (For some reason, doing this
-            # didn't always work when done in the child, so it is done in the
-            # parent).
             self.event_sock.send(protocol.Event(self.name, protocol.EVENT_STARTJOB))
 
-            self.logger.info('Starting child process')
-            self.logger.info('- command = "%s"', self.program)
-            self.logger.info('- stdin = %s', self.stdin)
-            self.logger.info('- sdout = %s', self.stdout)
-            self.logger.info('- stderr = %s', self.stderr)
-            self.logger.info('- environment')
+            LOGGER.info('Starting child process')
+            LOGGER.info('- command = "%s"', self.program)
+            LOGGER.info('- stdin = %s', self.stdin)
+            LOGGER.info('- sdout = %s', self.stdout)
+            LOGGER.info('- stderr = %s', self.stderr)
+            LOGGER.info('- environment')
             for var, value in self.env.items():
-                self.logger.info('* "%s" = "%s"', var, value)
-            self.logger.info('- working directory = %s',
+                LOGGER.info('* "%s" = "%s"', var, value)
+
+            LOGGER.info('- working directory = %s',
                 self.working_dir if self.working_dir is not None
                 else os.getcwd())
 
@@ -190,9 +190,9 @@ class ChildProcess:
                 #
                 # Although Linux pre-2.4 had issues with this (read waitpid(2)),
                 # this is fully compatible with POSIX.
-                self.logger.info('Waiting on "%s"', self.program)
-                pid, status = os.waitpid(self.child_pid.get(), 0)
-                self.logger.info('"%s" died', self.program)
+                LOGGER.info('Waiting on "%s"', self.program)
+                os.waitpid(self.child_pid.get(), 0)
+                LOGGER.info('"%s" died', self.program)
                 self.event_sock.send(protocol.Event(self.name, protocol.EVENT_STOPJOB))
                 self.child_pid.set(None)
 
@@ -209,13 +209,16 @@ class ChildProcess:
         """
         child_pid = self.child_pid.get()
         if child_pid is not None:
-            self.logger.info('Sending signal %d to "%s"', self.exit_signal, self.program)
+            LOGGER.info('Sending signal %d to "%s"', self.exit_signal, self.program)
 
             # Ensure all descendants of the process, not just the process itself,
             # die. This requires killing the process group.
             try:
                 proc_group = os.getpgid(child_pid)
+
+                LOGGER.info('Killing process group %d', proc_group)
                 os.killpg(proc_group, self.exit_signal)
+                LOGGER.info('Killed process group')
             except OSError:
                 # This happened once during the testing, and means that the
                 # process has died somehow. Try to go ahead and kill the child
@@ -223,14 +226,16 @@ class ChildProcess:
                 # the child's process group ID failed). If *that* fails, then
                 # just bail.
                 try:
-                    logging.info('Failed to kill child group of "%s" - falling back on killing the child itself', self.command)
+                    LOGGER.info('Failed to kill child group of "%s" - falling back on killing the child itself', self.name)
                     os.kill(child_pid, self.exit_signal)
                 except OSError:
                     # So, *somehow*, the process isn't around, even though
                     # the variable state indicates it is. Obviously, the
                     # variable state is wrong, and we need to correct that.
-                    logging.info('Inconsistent child PID of "%s" - fixing', self.command)
+                    LOGGER.info('Inconsistent child PID of "%s" - fixing', self.name)
                     self.child_pid.set(None)
+
+            LOGGER.info('Finished killing %s', self.name)
         else:
             raise ValueError('Child process not running - cannot kill it')
 

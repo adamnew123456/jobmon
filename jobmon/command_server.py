@@ -2,7 +2,6 @@
 The command server accepts connections and dispatches commands to the service.
 """
 import logging
-import os
 import select
 import socket
 import threading
@@ -21,6 +20,7 @@ class CommandServer(threading.Thread, util.TerminableThreadMixin):
         threading.Thread.__init__(self)
         util.TerminableThreadMixin.__init__(self)
 
+        LOGGER.info('Binding commands to localhost:%d', port)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.bind(('localhost', port))
@@ -34,25 +34,28 @@ class CommandServer(threading.Thread, util.TerminableThreadMixin):
         come in.
         """
         method_dict = {
-            protocol.CMD_START: self.supervisor.start_job, ## TODO
-            protocol.CMD_STOP: self.supervisor.stop_job, ## TODO
-            protocol.CMD_STATUS: self.supervisor.get_status, ## TODO
-            protocol.CMD_JOB_LIST: self.supervisor.list_jobs, ## TODO
-            protocol.CMD_QUIT: self.supervisor.terminate, ## TODO
+            protocol.CMD_START: self.supervisor.start_job,
+            protocol.CMD_STOP: self.supervisor.stop_job,
+            protocol.CMD_STATUS: self.supervisor.get_status,
+            protocol.CMD_JOB_LIST: self.supervisor.list_jobs,
+            protocol.CMD_QUIT: self.supervisor.terminate,
         }
 
         while True:
             readers, _, _ = select.select([self.sock, self.exit_reader], [], [])
 
+            if self.exit_reader in readers:
+                break
+
             if self.sock in readers:
                 _client, _ = self.sock.accept()
                 client = protocol.ProtocolStreamSocket(_client)
-                LOGGER.debug('Accepted client')
+                LOGGER.info('Accepted client')
 
                 message = client.recv()
                 method = method_dict[message.command_code]
 
-                LOGGER.debug('Received message %s', message)
+                LOGGER.info('Received message %s', message)
 
                 if message.command_code in (protocol.CMD_JOB_LIST, 
                                             protocol.CMD_QUIT):
@@ -60,20 +63,17 @@ class CommandServer(threading.Thread, util.TerminableThreadMixin):
                 else:
                     result = method(message.job_name)
 
-                LOGGER.debug('Got result from supervisor: %s', result)
+                LOGGER.info('Got result from supervisor: %s', result)
                 if result is not None:
                     client.send(result)
 
-                LOGGER.debug('Closing client')
+                LOGGER.info('Closing client')
                 client.close()
 
                 if message.command_code == protocol.CMD_QUIT:
                     break
 
-            if self.exit_reader in readers:
-                break
+        LOGGER.info('Closing...')
 
-        LOGGER.debug('Closing...')
-
-        self.sock.close()
         self.cleanup()
+        self.sock.close()

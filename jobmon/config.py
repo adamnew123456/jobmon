@@ -138,11 +138,11 @@ class ConfigHandler:
 
         if 'control-port' in supervisor_map:
             self.control_port = self.read_type(supervisor_map, 'control-port', int, 
-                                   self.control_port))
+                                   self.control_port)
 
         if 'event-port' in supervisor_map:
-            self.event_port = self.read_type(supervisor_map, 'control-port', int, 
-                                   self.event_port))
+            self.event_port = self.read_type(supervisor_map, 'event-port', int, 
+                                   self.event_port)
 
         if 'include-dirs' in supervisor_map:
             self.includes = self.read_type(supervisor_map, 'include-dirs', 
@@ -194,18 +194,18 @@ class ConfigHandler:
         for job_name, job in jobs_map.items():
             self.logger.info('Parsing info for %s', job_name)
             if 'command' not in job:
-                self.logger.warning('Continuing - this job lacks a command', job_name)
+                self.logger.warning('Continuing - %s lacks a command', job_name)
                 continue
 
             if job_name in self.jobs:
                 self.logger.warning('Continuing - job %s is a duplicate', job_name)
                 continue
 
-            process = monitor.ChildProcessSkeleton(job['command'])
+            process = monitor.ChildProcessSkeleton(job_name, job['command'])
 
             if 'stdin' in job:
                 default_value = process.stdin
-                process.config(stdin=expand_config_vars(
+                process.config(stdin=expand_path_vars(
                             self.read_type(job, 'stdin', str, default_value)))
             if 'stdout' in job:
                 default_value = process.stdout

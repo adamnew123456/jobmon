@@ -1,7 +1,0 @@
-{
-    "exit-immediately":
-    {
-        "command": "test-jobs/exit-immediately",
-        "restart": true
-    }
-}

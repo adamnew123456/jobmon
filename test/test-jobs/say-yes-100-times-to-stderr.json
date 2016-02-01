@@ -1,7 +1,0 @@
-{
-    "log-stderr":
-    {
-        "command": "test-jobs/say-yes-100-times-to-stderr",
-        "stderr": "/tmp/yes-100-stderr"
-    }
-}
