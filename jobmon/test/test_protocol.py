@@ -1,5 +1,6 @@
 import io
 import os
+import socket
 import threading
 import unittest
 
