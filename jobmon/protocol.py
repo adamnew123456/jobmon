@@ -287,6 +287,21 @@ class ProtocolStreamSocket:
     def fileno(self):
         return self.sock.fileno()
 
+    def _recv_all(self, length):
+        """
+        Receives the complete length of the socket, or otherwise throws an 
+        IOError if the socket closes while receiving.
+        """
+        buffer = b''
+        while len(buffer) < length:
+            chunk = self.sock.recv(length - len(buffer))
+            buffer += chunk
+
+            if not chunk:
+                raise IOError('Connection died, could not read command')
+
+        return buffer
+
     def send(self, message):
         """
         Sends a message over a socket, transforming it into JSON first.
@@ -314,7 +329,7 @@ class ProtocolStreamSocket:
             (body_length,) = struct.unpack('>I', length_header)
 
             # Read in and decode the raw JSON into UTF-8
-            raw_json_body = self.sock.recv(body_length)
+            raw_json_body = self._recv_all(body_length)
 
             json_body = raw_json_body.decode('utf-8')
             json_data = json.loads(json_body)

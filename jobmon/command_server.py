@@ -52,7 +52,13 @@ class CommandServer(threading.Thread, util.TerminableThreadMixin):
                 client = protocol.ProtocolStreamSocket(_client)
                 LOGGER.info('Accepted client')
 
-                message = client.recv()
+                try:
+                    message = client.recv()
+                except IOError:
+                    LOGGER.info('Incomplete command from client - closing')
+                    client.close()
+                    continue
+                    
                 method = method_dict[message.command_code]
 
                 LOGGER.info('Received message %s', message)
