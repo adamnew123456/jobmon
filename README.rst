@@ -50,7 +50,7 @@ Here is an example of a master configuration::
         "supervisor":
         {
             "working-dir": ".",
-            "command-port": 6666,
+            "control-port": 6666,
             "event-port": 6667,
             "include-dirs": [
                 "jobs/*.json"
@@ -69,7 +69,7 @@ Each part of the supervisor configuration is described below:
 - ``working-dir`` sets the working directory for the supervisor daemon. This
   can be useful if the paths used in the configuration file are relative
   paths. The default is not to change the working directory (i.e. use ``.``).
-- ``command-port`` sets the TCP port over which JobMon accepts commands. By
+- ``control-port`` sets the TCP port over which JobMon accepts commands. By
   default, it is the port 6666.
 - ``event-port`` sets the TCP port over which JobMon will dispatch events. By
   default, it is the port 6667.
