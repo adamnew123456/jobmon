@@ -12,6 +12,7 @@ this module will be something like the following::
 """
 import logging
 import os
+import sys
 
 from jobmon import (
     daemon, service, command_server, event_server, status_server, ticker
@@ -72,24 +73,20 @@ class SupervisorDaemon(daemon.Daemon):
             supervisor = service.SupervisorService(
                     config_handler, events, status, restart_svr)
 
-            try:
-                events.start()
-                commands.start()
-                status.start()
-                restart_svr.start()
-                supervisor.start()
+            events.start()
+            commands.start()
+            status.start()
+            restart_svr.start()
+            supervisor.start()
 
-                # This has to be done last, since it starts up the autostart
-                # jobs and gets the ball rolling
-                supervisor_shim.set_service(supervisor)
+            # This has to be done last, since it starts up the autostart
+            # jobs and gets the ball rolling
+            supervisor_shim.set_service(supervisor)
 
-                # The event server should be the last to terminate, since it
-                # has to tell the outside world that we're gone
-                LOGGER.info('Waiting for events to exit')
-                events.wait_for_exit()
-            finally:
-                LOGGER.info('Peace out!')
-                sys.exit(0)
+            # The event server should be the last to terminate, since it
+            # has to tell the outside world that we're gone
+            LOGGER.info('Waiting for events to exit')
+            events.wait_for_exit()
         except Exception as ex:
             LOGGER.error('DEAD SUPERVISOR', exc_info=True)
         finally:
