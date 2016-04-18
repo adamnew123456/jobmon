@@ -1,10 +1,13 @@
 import io
+import logging
 import os
 import socket
 import threading
 import unittest
 
 from jobmon.protocol import *
+
+logging.basicConfig(filename='jobmon-test_protocol.log', level=logging.DEBUG)
 
 class TestProtocol:
     def test_events(self):

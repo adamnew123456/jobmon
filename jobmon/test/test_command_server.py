@@ -1,3 +1,4 @@
+import logging
 import os
 import select
 import socket
@@ -6,6 +7,8 @@ import unittest
 
 from jobmon.protocol import *
 from jobmon import command_server, protocol, transport
+
+logging.basicConfig(filename='jobmon-test_command_server.log', level=logging.DEBUG)
 
 PORT = 9999
 

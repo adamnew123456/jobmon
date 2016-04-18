@@ -1,7 +1,10 @@
+import logging
 import time
 import unittest
 
 from jobmon import ticker
+
+logging.basicConfig(filename='jobmon-test_ticker.log', level=logging.DEBUG)
 
 class TickListener:
     def __init__(self):
