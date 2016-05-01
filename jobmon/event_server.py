@@ -32,8 +32,6 @@ class EventServer(threading.Thread):
         self.bridge_in = protocol.ProtocolFile(os.fdopen(reader, 'rb'))
         self.bridge_out = protocol.ProtocolFile(os.fdopen(writer, 'wb'))
 
-        self.exit_notify = threading.Event()
-
     def run(self):
         """
         Manages connections, and sends out events to waiting clients.
@@ -41,7 +39,6 @@ class EventServer(threading.Thread):
         pollster = selectors.DefaultSelector()
         pollster.register(self.sock, selectors.EVENT_READ)
         pollster.register(self.bridge_in, selectors.EVENT_READ)
-
 
         done = False
         clients = set()
@@ -75,7 +72,6 @@ class EventServer(threading.Thread):
                     clients.remove(key.fileobj)
 
         LOGGER.info('Closing...')
-        self.exit_notify.set()
 
         for client in clients:
             client.close()
@@ -105,5 +101,5 @@ class EventServer(threading.Thread):
 
     def wait_for_exit(self):
         LOGGER.info('Waiting on event to stop')
-        self.exit_notify.wait()
+        self.join()
         LOGGER.info('Event finished')

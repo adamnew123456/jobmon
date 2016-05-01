@@ -18,12 +18,10 @@ class TerminableThreadMixin:
         reader, writer = os.pipe()
         self.exit_reader = os.fdopen(reader, 'rb')
         self.exit_writer = os.fdopen(writer, 'wb')
-        self.exit_notify = threading.Event()
 
     def cleanup(self):
         self.exit_reader.close()
         self.exit_writer.close()
-        self.exit_notify.set()
 
     def terminate(self):
         """
@@ -40,4 +38,4 @@ class TerminableThreadMixin:
         Waits for the thread to exit - should be run only after terminating
         the thread.
         """
-        self.exit_notify.wait()
+        self.join()
