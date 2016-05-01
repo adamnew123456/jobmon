@@ -1,4 +1,5 @@
 from collections import namedtuple
+from concurrent.futures import Future
 import logging
 from queue import Queue
 import threading
@@ -34,11 +35,9 @@ class SupervisorService(threading.Thread):
     def __init__(self, config, event_svr, status_svr, restart_ticker):
         super().__init__()
 
-        # Note - these aren't expected to actually hold any more than one
-        # element, they're just a convenient way to pass objects between
-        # threads safely
+        # This contains pairs of (message, future), where the future is 
+        # assigned when the value is computed
         self.request_queue = Queue()
-        self.response_queue = Queue()
 
         self.jobs = config.jobs
         self.autostarts = config.autostarts
@@ -66,7 +65,7 @@ class SupervisorService(threading.Thread):
 
         done = False
         while not done:
-            request = self.request_queue.get()
+            request, future = self.request_queue.get()
             SERVICE_LOGGER.info('Got request %s', request)
 
             # For most commands, no response is necessary, so defaulting to
@@ -125,7 +124,7 @@ class SupervisorService(threading.Thread):
                         protocol.ERR_NO_SUCH_JOB)
 
             SERVICE_LOGGER.info('Sending response %s', response)
-            self.response_queue.put(response)
+            future.set_result(response)
 
         SERVICE_LOGGER.info('Done')
 
@@ -255,12 +254,15 @@ class SupervisorShim:
         the result queue.
         """
         SHIM_LOGGER.info('Sending %s %s to service', command, kwargs)
+        future = Future()
+
         try:
-            self.request_queue.put(Request(command, kwargs))
-            return self.response_queue.get()
+            self.request_queue.put((Request(command, kwargs), future))
         except AttributeError:
             # If the service has exited, then there's nothing to do
-            pass
+            future.set_result(None)
+
+        return future
 
     def set_service(self, service):
         """
@@ -268,8 +270,8 @@ class SupervisorShim:
         """
         SHIM_LOGGER.info('Starting service')
         self.request_queue = service.request_queue
-        self.response_queue = service.response_queue
 
+        self.service = service
         self._request('init')
 
     def on_job_timer_expire(self, job):
@@ -306,5 +308,9 @@ class SupervisorShim:
         self._request('terminate')
 
         self.request_queue = None
-        self.response_queue = None
+        self.service.join()
         SHIM_LOGGER.info('Got successful termination')
+
+        future = Future()
+        future.set_result(None)
+        return future

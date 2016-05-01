@@ -65,9 +65,9 @@ class CommandServer(threading.Thread, util.TerminableThreadMixin):
 
                 if message.command_code in (protocol.CMD_JOB_LIST, 
                                             protocol.CMD_QUIT):
-                    result = method()
+                    result = method().result()
                 else:
-                    result = method(message.job_name)
+                    result = method(message.job_name).result()
 
                 LOGGER.info('Got result from supervisor: %s', result)
                 if result is not None:
@@ -80,6 +80,5 @@ class CommandServer(threading.Thread, util.TerminableThreadMixin):
                     break
 
         LOGGER.info('Closing...')
-
         self.cleanup()
         self.sock.close()
