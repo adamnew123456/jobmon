@@ -60,8 +60,18 @@ class EventServer(threading.Thread):
                             msg,
                             len(clients))
 
+                    dead_clients = set()
+
                     for client in clients:
-                        client.send(msg)
+                        try:
+                            client.send(msg)
+                        except OSError:
+                            dead_clients.add(client)
+
+                    for client in dead_clients:
+                        LOGGER.info('Client died during sending - cleaning up')
+                        pollster.unregister(client)
+                        clients.remove(client)
 
                     if msg.event_code == protocol.EVENT_TERMINATE:
                         done = True

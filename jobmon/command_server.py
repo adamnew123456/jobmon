@@ -54,7 +54,7 @@ class CommandServer(threading.Thread, util.TerminableThreadMixin):
 
                 try:
                     message = client.recv()
-                except IOError:
+                except (IOError, OSError):
                     LOGGER.info('Incomplete command from client - closing')
                     client.close()
                     continue
@@ -71,7 +71,11 @@ class CommandServer(threading.Thread, util.TerminableThreadMixin):
 
                 LOGGER.info('Got result from supervisor: %s', result)
                 if result is not None:
-                    client.send(result)
+                    try:
+                        client.send(result)
+                    except OSError:
+                        LOGGER.info('Client died before result could be sent')
+                        pass
 
                 LOGGER.info('Closing client')
                 client.close()

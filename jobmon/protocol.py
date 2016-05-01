@@ -284,6 +284,11 @@ class ProtocolStreamSocket:
     def __init__(self, sock):
         self.sock = sock
 
+        # Note - there are parts of this code that are badly behaved if the
+        # other side does something nasty, like hangs up without sending us
+        # all it should. In those cases, the timeout is handy
+        sock.settimeout(15.0)
+
     def fileno(self):
         return self.sock.fileno()
 
@@ -335,7 +340,7 @@ class ProtocolStreamSocket:
             json_data = json.loads(json_body)
             return RECV_HANDLERS[json_data['type']].unserialize(json_data)
         except struct.error:
-            raise ValueError('Incomplete message received')
+            raise IOError('Incomplete message received')
 
     def close(self):
         self.sock.close()
