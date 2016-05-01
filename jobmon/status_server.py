@@ -18,8 +18,6 @@ class StatusServer(threading.Thread, util.TerminableThreadMixin):
     """
     def __init__(self, supervisor):
         threading.Thread.__init__(self)
-        self.daemon = True
-
         util.TerminableThreadMixin.__init__(self)
 
         self.supervisor = supervisor

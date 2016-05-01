@@ -200,7 +200,6 @@ class ChildProcess:
             # running child, they don't do much work (they basically block for
             # their whole existence).
             waiter_thread = threading.Thread(target=wait_for_subprocess)
-            waiter_thread.daemon = True
             waiter_thread.start()
 
     def kill(self):
