@@ -1,3 +1,4 @@
+from concurrent.futures import Future
 import logging
 import os
 import select
@@ -12,26 +13,41 @@ logging.basicConfig(filename='jobmon-test_command_server.log', level=logging.DEB
 
 PORT = 9999
 
+def wrap_future(func):
+    def _(*args):
+        future = Future()
+        value = func(*args)
+
+        future.set_result(value)
+        return future
+
+    return _
+
 class CommandServerRecorder:
     def __init__(self):
         self.commands = []
 
+    @wrap_future
     def start_job(self, job):
         self.commands.append(('start', job))
         return protocol.SuccessResponse(job)
 
+    @wrap_future
     def stop_job(self, job):
         self.commands.append(('stop', job))
         return protocol.SuccessResponse(job)
 
+    @wrap_future
     def get_status(self, job):
         self.commands.append(('status', job))
         return protocol.StatusResponse(job, True)
 
+    @wrap_future
     def list_jobs(self):
         self.commands.append('list')
         return protocol.JobListResponse({'a': True, 'b': False})
 
+    @wrap_future
     def terminate(self):
         self.commands.append('terminate')
 
