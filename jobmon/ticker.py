@@ -80,6 +80,9 @@ class Ticker(threading.Thread, util.TerminableThreadMixin):
         while True:
             try:
                 min_wait_time = min(self.timeouts.values()) - time.time()
+
+                if min_wait_time < 0:
+                    min_wait_time = 0
             except ValueError:
                 min_wait_time = None
 
