@@ -20,10 +20,10 @@ from jobmon import (
 
 # Make sure that we get console logging before the supervisor becomes a
 # daemon, so if any errors occur before that, they can be seen
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s %(message)s')
 
 LOGGER = logging.getLogger('jobmon.launcher')
-
 
 def run(config_handler, as_daemon=True):
     """
@@ -56,7 +56,8 @@ class SupervisorDaemon(daemon.Daemon):
         :param config.ConfigHandler config_handler: The configuration.
         """
         logging.basicConfig(filename=config_handler.log_file, 
-                            level=config_handler.log_level)
+                            level=config_handler.log_level,
+                            format='%(asctime)s %(message)s')
 
         # Read the jobs and start up the supervisor, and then make sure to
         # die if we exit
