@@ -7,6 +7,9 @@ from jobmon import ticker
 logging.basicConfig(filename='jobmon-test_ticker.log', level=logging.DEBUG)
 
 class TickListener:
+    """
+    A listener which records the events sent by a ticker.
+    """
     def __init__(self):
         self.events = []
 
@@ -15,6 +18,9 @@ class TickListener:
 
 class TestTicker(unittest.TestCase):
     def test_ticker_register(self):
+        """
+        Registers several events and makes sure that the ticker expires them all.
+        """
         listener = TickListener()
         ticks = ticker.Ticker(listener.tick)
         ticks.start()
@@ -32,6 +38,10 @@ class TestTicker(unittest.TestCase):
             ticks.wait_for_exit()
 
     def test_ticker_unregister(self):
+        """
+        Tests that the ticker doesn't expire events which are unregistered
+        before they complete.
+        """
         listener = TickListener()
         ticks = ticker.Ticker(listener.tick)
         ticks.start()

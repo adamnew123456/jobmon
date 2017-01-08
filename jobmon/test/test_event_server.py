@@ -14,6 +14,10 @@ PORT = 9999
 
 class TestEventServer(unittest.TestCase):
     def test_event_server(self):
+        """
+        Tests that the EventServer correctly broadcasts events to multiple
+        clients.
+        """
         event_srv = event_server.EventServer(PORT)
         event_srv.start()
         time.sleep(5) # Allow the event server time to accept clients

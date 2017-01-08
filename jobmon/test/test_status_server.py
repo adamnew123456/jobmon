@@ -13,6 +13,10 @@ logging.basicConfig(filename='jobmon-test_status_server.log', level=logging.DEBU
 PORT = 9999
 
 class StatusRecorder:
+    """
+    This is a replacement Supervisor that records what events occur on
+    processes in an internal log.
+    """
     def __init__(self):
         self.records = []
 
@@ -24,6 +28,10 @@ class StatusRecorder:
 
 class TestCommandServer(unittest.TestCase):
     def test_command_server(self):
+        """
+        Tests that the StatusServer can provide peer sockets which can
+        correctly send status messages to it.
+        """
         status_recorder = StatusRecorder()
         status_svr = status_server.StatusServer(status_recorder)
         status_svr.start()

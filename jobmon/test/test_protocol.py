@@ -15,8 +15,24 @@ logging.basicConfig(filename='jobmon-test_protocol.log', level=logging.DEBUG)
 TIMEOUT_LENGTH = 15.0
 
 class TestProtocol:
+    """
+    This contains all of the protocol tests, which are then layered ontop of
+    specific implementations of protocol wrappers.
+
+    Each subclass should have the methods:
+
+        (reader, writer) = make_protocol(timeout=True)
+        cleanup_protocol(reader, writer)
+
+    make_protocol should create two instances of the protocol wrapper under
+    test (one reading and one writing) and then cleanup_protocol should destroy
+    those objects.
+    """
     def test_events(self):
         events = (EVENT_STARTJOB, EVENT_STOPJOB, EVENT_RESTARTJOB, 
+        """
+        Tests that events can be correctly transmitted over a protocol channel.
+        """
                 EVENT_TERMINATE)
 
         proto_read, proto_write = self.make_protocol()
@@ -32,6 +48,9 @@ class TestProtocol:
             self.cleanup_protocol(proto_read, proto_write)
 
     def test_commands(self):
+        """
+        Tests that events can be correctly transmitted over a protocol channel.
+        """
         commands = (CMD_START, CMD_STOP, CMD_STATUS, CMD_JOB_LIST, CMD_QUIT)
         proto_read, proto_write = self.make_protocol()
 
@@ -47,6 +66,10 @@ class TestProtocol:
 
     def test_resonses(self):
         responses = (SuccessResponse('some_job'), 
+        """
+        Tests that the different kinds of responses can be correctly
+        transmitted over a protocol channel.
+        """
                 FailureResponse('some_job', ERR_NO_SUCH_JOB),
                 FailureResponse('some_job', ERR_JOB_STARTED),
                 FailureResponse('some_job', ERR_JOB_STOPPED),
@@ -131,6 +154,10 @@ class TestProtocol:
             self.cleanup_protocol(proto_read, proto_write)
 
 class TestProtocolFile(TestProtocol, unittest.TestCase):
+    """
+    An implementation of TestProtocol that provides ProtocolFile on top of
+    anonymous pipes.
+    """
     def make_protocol(self, timeout=True):
         reader, writer = os.pipe()
 
@@ -146,6 +173,10 @@ class TestProtocolFile(TestProtocol, unittest.TestCase):
 PORT = 9999
 
 class TestProtocolStreamSocket(TestProtocol, unittest.TestCase):
+    """
+    An implementation of TestProtocol that provides ProtocolStreamSocket on top
+    of TCP sockets.
+    """
     def make_protocol(self, timeout=True):
         server = socket.socket()
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -167,6 +198,10 @@ class TestProtocolStreamSocket(TestProtocol, unittest.TestCase):
         reader.close()
 
 class TestProtocolDatagramSocket(TestProtocol, unittest.TestCase):
+    """
+    An implementation of TestProtocol that provides ProtocolDatagramSocket on top
+    of UDP sockets.
+    """
     def make_protocol(self, timeout=True):
         reader = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         reader.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)

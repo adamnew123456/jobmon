@@ -14,6 +14,10 @@ logging.basicConfig(filename='jobmon-test_command_server.log', level=logging.DEB
 PORT = 9999
 
 def wrap_future(func):
+    """
+    A decorator which is used to turn a function returning a value into a
+    function returning a Future.
+    """
     def _(*args):
         future = Future()
         value = func(*args)
@@ -24,6 +28,9 @@ def wrap_future(func):
     return _
 
 class CommandServerRecorder:
+    """
+    This is a replacement Supervisor that records the commands given to it.
+    """
     def __init__(self):
         self.commands = []
 
@@ -53,6 +60,10 @@ class CommandServerRecorder:
 
 class TestCommandServer(unittest.TestCase):
     def test_command_server(self):
+        """
+        Ensure that the command pipe can successfully transmit standard
+        requests and responses.
+        """
         command_recorder = CommandServerRecorder()
         command_svr = command_server.CommandServer(PORT, command_recorder)
         command_svr.start()
