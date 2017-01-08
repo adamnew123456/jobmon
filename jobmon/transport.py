@@ -36,7 +36,7 @@ class EventStream:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             self.sock.connect(('localhost', socket_no))
-            self.sock = protocol.ProtocolStreamSocket(self.sock)
+            self.sock = protocol.ProtocolStreamSocket(self.sock, timeout=None)
         except OSError:
             raise IOError('Cannot connect to supervisor')
 

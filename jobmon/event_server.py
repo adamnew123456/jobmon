@@ -29,8 +29,10 @@ class EventServer(threading.Thread):
         # Since we can't really select on queues, pipes are the next best
         # option
         reader, writer = os.pipe()
-        self.bridge_in = protocol.ProtocolFile(os.fdopen(reader, 'rb'))
-        self.bridge_out = protocol.ProtocolFile(os.fdopen(writer, 'wb'))
+        self.bridge_in = protocol.ProtocolFile(os.fdopen(reader, 'rb'),
+                                               timeout=None)
+        self.bridge_out = protocol.ProtocolFile(os.fdopen(writer, 'wb'),
+                                                timeout=None)
 
     def run(self):
         """
@@ -50,13 +52,13 @@ class EventServer(threading.Thread):
                     LOGGER.info('Client connected')
 
                     _client, _ = self.sock.accept()
-                    client = protocol.ProtocolStreamSocket(_client)
+                    client = protocol.ProtocolStreamSocket(_client, timeout=None)
 
                     pollster.register(client, selectors.EVENT_READ)
                     clients.add(client)
                 elif key.fileobj == self.bridge_in:
                     msg = self.bridge_in.recv()
-                    LOGGER.info('Reporting %s to %d clients', 
+                    LOGGER.info('Reporting %s to %d clients',
                             msg,
                             len(clients))
 

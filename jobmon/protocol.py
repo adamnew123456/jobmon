@@ -29,6 +29,8 @@ protocol. These are:
 """
 from collections import namedtuple
 import json
+import select
+import socket
 import struct
 
 # Constants for denoting event codes
@@ -265,6 +267,19 @@ RECV_HANDLERS = {
     MSG_JOB_LIST: JobListResponse,
 }
 
+class ProtocolTimeout(Exception):
+    """
+    Used to indicate that the other end of the connection hasn't sent any data.
+
+    Note that this is not always an error - for example, when doing a:
+
+        jobmon wait foo
+
+    The state of foo could stay the same for an arbitrary amount of time, which
+    isn't the same as saying that there is a problem. There *could* be, but
+    there doesn't have to be.
+    """
+
 # The basic protocol is a 4-byte header, indicating the length of the following
 # JSON.
 #
@@ -280,14 +295,15 @@ class ProtocolStreamSocket:
      - recv() writes a message into the socket
      - fileno() gets the file number of the socket
      - close() closes the socket
-    """
-    def __init__(self, sock):
-        self.sock = sock
 
-        # Note - there are parts of this code that are badly behaved if the
-        # other side does something nasty, like hangs up without sending us
-        # all it should. In those cases, the timeout is handy
-        sock.settimeout(15.0)
+    Each protocol is responsible for issuing timeout errors if a recv() doesn't
+    complete within a fixed amount of time, configurable via the timeout
+    parameter in __init__ (it can be None to disable the timeout)
+    """
+    def __init__(self, sock, timeout=15.0):
+        self.sock = sock
+        if timeout is not None:
+            sock.settimeout(timeout)
 
     def fileno(self):
         return self.sock.fileno()
@@ -341,6 +357,8 @@ class ProtocolStreamSocket:
             return RECV_HANDLERS[json_data['type']].unserialize(json_data)
         except struct.error:
             raise IOError('Incomplete message received')
+        except socket.timeout:
+            raise ProtocolTimeout()
 
     def close(self):
         self.sock.close()
@@ -355,9 +373,11 @@ class ProtocolDatagramSocket:
     """
     BUFFER_SIZE = 500
 
-    def __init__(self, sock, peer):
+    def __init__(self, sock, peer, timeout=15.0):
         self.sock = sock
         self.peer = peer
+        if timeout is not None:
+            sock.settimeout(timeout)
 
     def fileno(self):
         return self.sock.fileno()
@@ -379,15 +399,18 @@ class ProtocolDatagramSocket:
         Reads a message from a socket, and returns a tuple containing
         both the message, and the peer's address.
         """
-        datagram, _ = self.sock.recvfrom(self.BUFFER_SIZE)
-        length_header = datagram[:4]
-        (body_length,) = struct.unpack('>I', length_header)
+        try:
+            datagram, _ = self.sock.recvfrom(self.BUFFER_SIZE)
+            length_header = datagram[:4]
+            (body_length,) = struct.unpack('>I', length_header)
 
-        raw_json_body = datagram[4:4 + body_length]
+            raw_json_body = datagram[4:4 + body_length]
 
-        json_body = raw_json_body.decode('utf-8')
-        json_data = json.loads(json_body)
-        return RECV_HANDLERS[json_data['type']].unserialize(json_data)
+            json_body = raw_json_body.decode('utf-8')
+            json_data = json.loads(json_body)
+            return RECV_HANDLERS[json_data['type']].unserialize(json_data)
+        except socket.timeout:
+            raise ProtocolTimeout()
 
     def close(self):
         self.sock.close()
@@ -396,8 +419,9 @@ class ProtocolFile:
     """
     Similar to a protocol socket, but this works with file handles instead.
     """
-    def __init__(self, fobj):
+    def __init__(self, fobj, timeout=15.0):
         self.fobj = fobj
+        self.timeout = timeout
 
     def fileno(self):
         return self.fobj.fileno()
@@ -415,13 +439,33 @@ class ProtocolFile:
         self.fobj.write(to_send)
         self.fobj.flush()
 
+    def _wait_for_read(self):
+        """
+        Waits for data to become ready on the other side of the file.
+
+        If no data appears within the timeout, then a ProtocolTimeout is
+        raised. data is received within the timeout.
+        """
+        if self.timeout is None:
+            return
+
+        (readers, _, _) = select.select([self.fobj], [], [], self.timeout)
+        if self.fobj not in readers:
+            raise ProtocolTimeout()
+
     def recv(self):
         """
         Reads a message from a socket, and returns it.
         """
+        self._wait_for_read()
         length_header = self.fobj.read(4)
         (body_length,) = struct.unpack('>I', length_header)
 
+        # Note that adding this here causes a ProtocolTimeout to be raised in
+        # situations where it shouldn't be - I'm assuming because of some buffering
+        # that is going on behind the scenes.
+        #
+        #     self._wait_for_read()
         raw_json_body = self.fobj.read(body_length)
 
         json_body = raw_json_body.decode('utf-8')

@@ -58,7 +58,11 @@ class CommandServer(threading.Thread, util.TerminableThreadMixin):
                     LOGGER.info('Incomplete command from client - closing')
                     client.close()
                     continue
-                    
+                except protocol.ProtocolTimeout:
+                    LOGGER.info('Client did not send command quickly enough')
+                    client.close()
+                    continue
+
                 method = method_dict[message.command_code]
 
                 LOGGER.info('Received message %s', message)

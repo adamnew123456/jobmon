@@ -25,7 +25,7 @@ class StatusServer(threading.Thread, util.TerminableThreadMixin):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setblocking(False)
         sock.bind(('localhost', 0))
-        self.sock = protocol.ProtocolDatagramSocket(sock, None)
+        self.sock = protocol.ProtocolDatagramSocket(sock, None, timeout=None)
 
     def get_peer(self):
         """
@@ -33,7 +33,7 @@ class StatusServer(threading.Thread, util.TerminableThreadMixin):
         """
         _, port = self.sock.sock.getsockname()
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        return protocol.ProtocolDatagramSocket(sock, ('localhost', port))
+        return protocol.ProtocolDatagramSocket(sock, ('localhost', port), timeout=None)
 
     def run(self):
         """
