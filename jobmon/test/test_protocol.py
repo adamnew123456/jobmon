@@ -3,11 +3,16 @@ import logging
 import os
 import socket
 import threading
+import time
 import unittest
 
 from jobmon.protocol import *
 
 logging.basicConfig(filename='jobmon-test_protocol.log', level=logging.DEBUG)
+
+# The timeout value used when protocol wrappers with timeouts are requested.
+# This value is in seconds.
+TIMEOUT_LENGTH = 15.0
 
 class TestProtocol:
     def test_events(self):
@@ -59,12 +64,79 @@ class TestProtocol:
         finally:
             self.cleanup_protocol(proto_read, proto_write)
 
+    def test_fail_with_timeout(self):
+        """
+        Ensure that the transport raises a ProtocolTimeout if timeouts are
+        configured.
+        """
+        response = StatusResponse('some_job', True)
+
+        proto_read, proto_write = self.make_protocol()
+
+        # The basic flow here is this:
+        #
+        # 1. The writer thread sleeps.
+        # 2. The reader calls recv() which blocks.
+        # 3. The writer wakes and sends the query.
+        # 4. The reader's call to recv() returns.
+        def writer():
+            """
+            In order to do the blocking recv before the write, we have to fork
+            one of them off into its own thread.
+            """
+            time.sleep(60)
+            proto_write.send(response)
+
+        write_thread = threading.Thread(target=writer)
+        write_thread.start()
+        try:
+            proto_read.recv()
+            self.fail('Timeout expected, but message received')
+        except ProtocolTimeout:
+            pass
+        finally:
+            write_thread.join()
+            self.cleanup_protocol(proto_read, proto_write)
+
+    def test_recv_without_timeout(self):
+        """
+        Ensure that the transport does not raise a ProtocolTimeout if timeouts
+        are not configured.
+        """
+        response = StatusResponse('some_job', True)
+
+        proto_read, proto_write = self.make_protocol(timeout=False)
+
+        # The basic flow here is this:
+        #
+        # 1. The writer thread sleeps.
+        # 2. The reader calls recv() which blocks.
+        # 3. The writer wakes and sends the query.
+        # 4. The reader's call to recv() returns.
+        def writer():
+            """
+            In order to do the blocking recv before the write, we have to fork
+            one of them off into its own thread.
+            """
+            time.sleep(60)
+            proto_write.send(response)
+
+        write_thread = threading.Thread(target=writer)
+        write_thread.start()
+        try:
+            out_response = proto_read.recv()
+            self.assertEqual(out_response, response)
+        finally:
+            write_thread.join()
+            self.cleanup_protocol(proto_read, proto_write)
+
 class TestProtocolFile(TestProtocol, unittest.TestCase):
-    def make_protocol(self):
+    def make_protocol(self, timeout=True):
         reader, writer = os.pipe()
 
-        protocol_reader = ProtocolFile(os.fdopen(reader, 'rb'))
-        protocol_writer = ProtocolFile(os.fdopen(writer, 'wb'))
+        timeout_val = TIMEOUT_LENGTH if timeout else None
+        protocol_reader = ProtocolFile(os.fdopen(reader, 'rb'), timeout_val)
+        protocol_writer = ProtocolFile(os.fdopen(writer, 'wb'), timeout_val)
         return protocol_reader, protocol_writer
 
     def cleanup_protocol(self, reader, writer):
@@ -74,105 +146,38 @@ class TestProtocolFile(TestProtocol, unittest.TestCase):
 PORT = 9999
 
 class TestProtocolStreamSocket(TestProtocol, unittest.TestCase):
-    class ServerThread(threading.Thread):
-        def __init__(self):
-            super().__init__()
-            self.wait_for_start = threading.Event()
-            self.wait_for_client = threading.Event()
-            self.initialize_exit = threading.Event()
-            self.wait_for_exit = threading.Event()
-
-            self.client = None
-
-        def run(self):
-            server = socket.socket()
-            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-            server.bind(('localhost', PORT))
-            server.listen(1)
-            self.wait_for_start.set()
-
-            self.client, _ = server.accept()
-            self.wait_for_client.set()
-
-            self.initialize_exit.wait()
-
-            self.client.close()
-            server.close()
-
-            self.wait_for_exit.set()
-
-        def wait_start(self):
-            self.wait_for_start.wait()
-
-        def wait_client(self):
-            self.wait_for_client.wait()
-
-        def exit(self):
-            self.initialize_exit.set()
-            self.wait_for_exit.wait()
-
-    def make_protocol(self):
-        self._thread = self.ServerThread()
-        self._thread.start()
-        self._thread.wait_start()
+    def make_protocol(self, timeout=True):
+        server = socket.socket()
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind(('localhost', PORT))
+        server.listen(1)
 
         writer = socket.socket()
         writer.connect(('localhost', PORT))
-        self._thread.wait_client()
 
-        reader = self._thread.client
+        reader, _ = server.accept()
+        server.close()
 
-        return ProtocolStreamSocket(reader), ProtocolStreamSocket(writer)
+        timeout_val = TIMEOUT_LENGTH if timeout else None
+        return (ProtocolStreamSocket(reader, timeout_val),
+                ProtocolStreamSocket(writer, timeout_val))
 
     def cleanup_protocol(self, reader, writer):
-        self._thread.exit()
         writer.close()
-        # The reader is already closed, since the server thread is done
+        reader.close()
 
 class TestProtocolDatagramSocket(TestProtocol, unittest.TestCase):
-    class ServerThread(threading.Thread):
-        def __init__(self):
-            super().__init__()
-            self.wait_for_start = threading.Event()
-            self.initialize_exit = threading.Event()
-            self.wait_for_exit = threading.Event()
+    def make_protocol(self, timeout=True):
+        reader = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        reader.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        reader.bind(('localhost', PORT))
 
-            self.server = None
+        writer = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-        def run(self):
-            self.server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            self.server.bind(('localhost', PORT))
-
-            self.wait_for_start.set()
-
-            self.initialize_exit.wait()
-
-            self.server.close()
-
-            self.wait_for_exit.set()
-
-        def wait_start(self):
-            self.wait_for_start.wait()
-
-        def exit(self):
-            self.initialize_exit.set()
-            self.wait_for_exit.wait()
-
-    def make_protocol(self):
-        self._thread = self.ServerThread()
-        self._thread.start()
-        self._thread.wait_start()
-
-        _writer = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        writer = ProtocolDatagramSocket(_writer, ('localhost', PORT))
-
-        _reader = self._thread.server
-        reader = ProtocolDatagramSocket(_reader, None)
-
-        return reader, writer
+        timeout_val = TIMEOUT_LENGTH if timeout else None
+        return (ProtocolDatagramSocket(reader, None, timeout_val),
+                ProtocolDatagramSocket(writer, ('localhost', PORT), timeout_val))
 
     def cleanup_protocol(self, reader, writer):
-        self._thread.exit()
+        reader.close()
         writer.close()
-        # The reader is already closed, since the server thread is done
