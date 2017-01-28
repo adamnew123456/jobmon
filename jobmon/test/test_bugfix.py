@@ -2,6 +2,7 @@
 Tests which exist to pinpoint specific bugs and verify that they are fixed.
 """
 import signal
+import string
 import sys
 import tempfile
 import time
@@ -44,7 +45,8 @@ class TimeoutManager:
         signal.alarm(self.timeout)
         return self
 
-    def __exit__(self):
+    def __exit__(self, *excinfo):
+        signal.alarm(0)
         signal.signal(signal.SIGALRM, self.old_handler)
 
 def double_restart_bug(log_filename, timeout=60):
@@ -63,8 +65,8 @@ def double_restart_bug(log_filename, timeout=60):
                 {
                     "supervisor": {
                         "working-dir": "$DIR",
-                        "control-port": "$CMDPORT",
-                        "event-port": "$EVENTPORT",
+                        "control-port": $CMDPORT,
+                        "event-port": $EVENTPORT,
                         "log-level": "DEBUG",
                         "log-file": "$LOGFILE"
                     },
@@ -107,7 +109,7 @@ def double_restart_bug(log_filename, timeout=60):
             # service hits the bug, it'll raise a ValueError after the 
             # backoff and the terminate will fail, tripping the timeout on this
             # test.
-            cmd_pipe = transport.CommandPie(TEST_CMD_PORT)
+            cmd_pipe = transport.CommandPipe(TEST_CMD_PORT)
             cmd_pipe.start_job('test')
             cmd_pipe.terminate()
 
