@@ -42,8 +42,8 @@ def run(config_handler, as_daemon=True):
         stderr=config_handler.log_file)
 
     logging.info('Sending log messages[%s] to %s', 
-            config_handler.log_file,
-            config_handler.log_level)
+            config_handler.log_level,
+            config_handler.log_file)
 
     supervisor_wrapper.start(config_handler)
 
