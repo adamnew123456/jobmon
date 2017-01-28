@@ -199,6 +199,12 @@ class SupervisorService(threading.Thread):
             self.blocked_restarts.remove(job)
             self.restart_ticker.unregister(job)
 
+        if job in self.restart_times:
+            # If the job is going to be started again, then let the timer
+            # handle this request instead of us
+            SERVICE_LOGGER.info('Ignoring start of %s, will restart soon', job)
+            return protocol.SuccessResponse(job)
+
         try:
             job_obj.start()
             SERVICE_LOGGER.info('Successful start of %s', job)
