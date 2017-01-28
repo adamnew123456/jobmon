@@ -92,7 +92,7 @@ class ConfigHandler:
         """
         value = dct[key]
         if not isinstance(value, expected_type):
-            self.logger.log('Expected "%s" to be a %s, but got a %s instead',
+            self.logger.error('Expected "%s" to be a %s, but got a %s instead',
                         key, expected_type, value)
             return default
 
