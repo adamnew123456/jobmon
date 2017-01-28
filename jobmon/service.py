@@ -184,7 +184,7 @@ class SupervisorService(threading.Thread):
             else:
                 SERVICE_LOGGER.info('Restarting job %s', job)
                 self.jobs[job].start()
-                self.events.send(job, protocol.EVENT_STARTJOB)
+                self.events.send(job, protocol.EVENT_RESTARTJOB)
         else:
             SERVICE_LOGGER.info('Cannot restart %s', job)
             self.events.send(job, protocol.EVENT_STOPJOB)
