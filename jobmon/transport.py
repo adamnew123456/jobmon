@@ -38,6 +38,7 @@ class EventStream:
             self.sock.connect(('localhost', socket_no))
             self.sock = protocol.ProtocolStreamSocket(self.sock, timeout=None)
         except OSError:
+            self.sock.close()
             raise IOError('Cannot connect to supervisor')
 
     def fileno(self):
