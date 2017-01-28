@@ -159,7 +159,7 @@ def main():
         # JOBMON_CONTROL_DIR to
         print(config_handler.control_port, ',', config_handler.event_port, sep='')
 
-        launcher.run(config_handler)
+        launcher.run_daemon(config_handler)
     elif args.command == 'start':
         # Establish a connection to the job service, and start the job.
         try:
