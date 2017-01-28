@@ -193,8 +193,8 @@ class ChildProcess:
                 LOGGER.info('Waiting on "%s"', self.program)
                 os.waitpid(self.child_pid.get(), 0)
                 LOGGER.info('"%s" died', self.program)
-                self.event_sock.send(protocol.Event(self.name, protocol.EVENT_STOPJOB))
                 self.child_pid.set(None)
+                self.event_sock.send(protocol.Event(self.name, protocol.EVENT_STOPJOB))
 
             # Although it might seem like a waste to spawn a thread for each
             # running child, they don't do much work (they basically block for
