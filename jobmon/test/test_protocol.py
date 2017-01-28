@@ -29,10 +29,10 @@ class TestProtocol:
     those objects.
     """
     def test_events(self):
-        events = (EVENT_STARTJOB, EVENT_STOPJOB, EVENT_RESTARTJOB, 
         """
         Tests that events can be correctly transmitted over a protocol channel.
         """
+        events = (EVENT_STARTJOB, EVENT_STOPJOB, EVENT_RESTARTJOB, 
                 EVENT_TERMINATE)
 
         proto_read, proto_write = self.make_protocol()
@@ -65,11 +65,11 @@ class TestProtocol:
             self.cleanup_protocol(proto_read, proto_write)
 
     def test_resonses(self):
-        responses = (SuccessResponse('some_job'), 
         """
         Tests that the different kinds of responses can be correctly
         transmitted over a protocol channel.
         """
+        responses = (SuccessResponse('some_job'), 
                 FailureResponse('some_job', ERR_NO_SUCH_JOB),
                 FailureResponse('some_job', ERR_JOB_STARTED),
                 FailureResponse('some_job', ERR_JOB_STOPPED),
