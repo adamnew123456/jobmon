@@ -1,5 +1,14 @@
+import logging
 import os
 import threading
+
+def reset_loggers():
+    """
+    Removes all handlers from the current loggers to allow for a new basicConfig.
+    """
+    root = logging.getLogger()
+    for handler in root.handlers[:]:
+        root.removeHandler(handler)
 
 class TerminableThreadMixin:
     """
