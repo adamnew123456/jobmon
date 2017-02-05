@@ -165,14 +165,14 @@ def double_restart_bug(log_filename, timeout=120):
                     if evt == protocol.Event('', protocol.EVENT_TERMINATE):
                         break
 
-                print("   <<< Terminating server", file=sys.stderr)
+                print("   <<< Terminating server")
 
                 # It might take some time between delivery of the event and the
                 # server shutting itself down completely. In this case, give it a
                 # little while.
                 time.sleep(5)
 
-                print("   >>> Doing final check for server", file=sys.stderr)
+                print("   >>> Doing final check for server")
                 os.kill(server_pid, signal.SIGKILL)
                 os.waitpid(server_pid, 0)
                 server_pid = None
@@ -184,6 +184,161 @@ def double_restart_bug(log_filename, timeout=120):
         if event_stream is not None:
             event_stream.destroy()
 
+def not_stopping_child_processes(log_filename, timeout=120):
+    """
+    This is designed to test for the presence of a bug, where the service
+    manager doesn't shut down all the children fully before it terminates; this
+    leaves them (in most real cases) to be picked up by the init process.
+    """
+    server_pid = None
+    event_stream = None
+    terminated_events = set()
+    all_jobs = {'test{}'.format(x) for x in range(1, 11)}
+
+    try:
+        with TimeoutManager(timeout):
+            # Here, we want several jobs that will be running when we decide to
+            # terminate the server
+            with tempfile.TemporaryDirectory() as temp_dir:
+                print("   >>> Expanding configuration")
+                DOUBLE_RESTART_TEST_CONFIG = expand_vars('''
+                    {
+                        "supervisor": {
+                            "control-port": $CMDPORT, "event-port": $EVENTPORT,
+                            "log-level": "DEBUG",
+                            "log-file": "$LOGFILE"
+                        },
+                        "jobs": {
+                            "test1": {
+                                "command": "sleep 300",
+                                "autostart": true
+                            },
+                            "test2": {
+                                "command": "sleep 300",
+                                "autostart": true
+                            },
+                            "test3": {
+                                "command": "sleep 300",
+                                "autostart": true
+                            },
+                            "test4": {
+                                "command": "sleep 300",
+                                "autostart": true
+                            },
+                            "test5": {
+                                "command": "sleep 300",
+                                "autostart": true
+                            },
+                            "test6": {
+                                "command": "sleep 300",
+                                "autostart": true
+                            },
+                            "test7": {
+                                "command": "sleep 300",
+                                "autostart": true
+                            },
+                            "test8": {
+                                "command": "sleep 300",
+                                "autostart": true
+                            },
+                            "test9": {
+                                "command": "sleep 300",
+                                "autostart": true
+                            },
+                            "test10": {
+                                "command": "sleep 300",
+                                "autostart": true
+                            }
+                        }
+                    }
+                    ''', 
+                    DIR=temp_dir,
+                    CMDPORT=str(TEST_CMD_PORT),
+                    EVENTPORT=str(TEST_EVENT_PORT),
+                    LOGFILE=log_filename)
+                print("   <<< Expanding configuration")
+
+                print("   >>> Writing configuration")
+                with open(temp_dir + '/config.json', 'w') as config_file:
+                    config_file.write(DOUBLE_RESTART_TEST_CONFIG)
+                print("   <<< Writing configuration")
+
+                print("   >>> Loading configuration")
+                config_handler = config.ConfigHandler()
+                config_handler.load(temp_dir + '/config.json')
+                print("   <<< Loading configuration")
+
+                print("   >>> Launching server")
+                server_pid = launcher.run_fork(config_handler)
+                print("   <<< Launching server [PID", server_pid, "]")
+
+                # Give the server some time to set up before we start shoving
+                # things at it
+                print("   >>> Starting server")
+
+                while True:
+                    try:
+                        event_stream = transport.EventStream(TEST_EVENT_PORT)
+                        break
+                    except OSError:
+                        time.sleep(0.5)
+
+                # We won't need this until later
+                event_stream.destroy()
+
+                print("   <<< Starting server")
+
+                # Give the server time to autostart everything. Events are bit
+                # finnicky here, since we might not connect in time to get them.
+                time.sleep(5)
+
+                # Wait for all jobs to autostart
+                print("   >>> Waiting on autostart")
+                cmd_pipe = transport.CommandPipe(TEST_CMD_PORT)
+                for job in all_jobs:
+                    while not cmd_pipe.is_running(job):
+                        time.sleep(1)
+
+                    print("   --- Running:", job, "@")
+
+                print("   <<< Waiting on autostart")
+
+                # Terminate the server, and see how many events are actually 
+                # reported as stopping
+                print("   >>> Terminating the server")
+                cmd_pipe.terminate()
+                print("   <<< Terminating the server")
+
+                print("   >>> Waiting on termination")
+                event_stream = transport.EventStream(TEST_EVENT_PORT)
+                while True:
+                    print("   ~~~ Awaiting @")
+                    evt = event_stream.next_event()
+
+                    if evt.event_code == protocol.EVENT_TERMINATE:
+                        print("   --- Terminated @")
+                        break
+                    elif evt.event_code == protocol.EVENT_STOPJOB:
+                        print("   --- Stopped", evt.job_name, "@")
+                        terminated_events.add(evt.job_name)
+                    else:
+                        print("   --- Unknown", evt, "@")
+
+                print("   <<< Waiting on termination")
+    except Exception as ex:
+        # Finally will eat the exception, so make sure it gets logged for diagnostics
+        print("    *** ERROR", ex)
+        traceback.print_exc()
+    finally:
+        if server_pid is not None:
+            os.kill(server_pid, signal.SIGKILL)
+            os.waitpid(server_pid, 0)
+
+        if event_stream is not None:
+            event_stream.destroy()
+
+        return all_jobs, terminated_events
+
 class TestBugfixes(unittest.TestCase):
     def test_double_restart_bug(self):
         """
@@ -192,6 +347,22 @@ class TestBugfixes(unittest.TestCase):
         with tempfile.NamedTemporaryFile(mode='r') as log_file:
             try:
                 double_restart_bug(log_file.name)
+            finally:
+                print('=====')
+                log_file.seek(0)
+                print(log_file.read())
+                print('-----')
+
+    def test_terminate_(self):
+        """
+        Tests the double restart bug.
+        """
+        with tempfile.NamedTemporaryFile(mode='r') as log_file:
+            try:
+                all_jobs, stopped_jobs = not_stopping_child_processes(
+                        log_file.name)
+
+                self.assertEqual(all_jobs, stopped_jobs)
             finally:
                 print('=====')
                 log_file.seek(0)
