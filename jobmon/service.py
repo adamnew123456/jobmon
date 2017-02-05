@@ -43,6 +43,12 @@ class SupervisorService(threading.Thread):
         self.autostarts = config.autostarts
         self.restarts = config.restarts
 
+        # This is used exclusively for shutdown, when we want to make sure
+        # that every job is dead before we stop the event server and take
+        # down the whole daemon
+        self.shutting_down = False
+        self.running_jobs = set()
+
         self.events = event_svr
         self.status = status_svr
         self.restart_ticker = restart_ticker
@@ -77,23 +83,20 @@ class SupervisorService(threading.Thread):
                     self.init_jobs()
 
                 elif request.action == 'terminate':
-                    SERVICE_LOGGER.info('KILL: status')
-                    self.status.terminate()
-                    SERVICE_LOGGER.info('KILL: events')
-                    self.events.terminate()
-                    SERVICE_LOGGER.info('KILL: ticker')
-                    self.restart_ticker.terminate()
-
-                    SERVICE_LOGGER.info('BURY: status')
-                    self.status.wait_for_exit()
-                    SERVICE_LOGGER.info('BURY: events')
-                    self.events.wait_for_exit()
-                    SERVICE_LOGGER.info('BURY: ticker')
-                    self.restart_ticker.wait_for_exit()
-
+                    # Apologies in advance for the control flow here.
+                    #
+                    # It's very important that all child processes get shut
+                    # down, and to that effect, we have to wait from word
+                    # sent by the status server that all of them have died.
+                    #
+                    # The problem is that these come in as requests, which
+                    # means that we have to enter a special mode where we
+                    # handle only job-started and job-stopped, to ensure
+                    # that all dying chidren are accounted for.
+                    self.shutting_down = True
                     self.cleanup_jobs()
-                    done = True
 
+                    done = True
                 elif request.action == 'job-started':
                     self.process_start(request.args['job'])
 
@@ -126,7 +129,48 @@ class SupervisorService(threading.Thread):
             SERVICE_LOGGER.info('Sending response %s', response)
             future.set_result(response)
 
-        SERVICE_LOGGER.info('Done')
+        # Wait for the status server to get back to us with all of its
+        # closure notifications. See the 'terminate' case above for an
+        # explanation of why this is necessary.
+        SERVICE_LOGGER.info('Entering event closure loop')
+        while self.running_jobs and not self.request_queue.empty():
+            SERVICE_LOGGER.info('Still running: %s', self.running_jobs)
+            request, future = self.request_queue.get()
+
+            SERVICE_LOGGER.info('Got closing request %s', request)
+
+            if request.action == 'job-started':
+                self.process_start(request.args['job'])
+
+                # Clearly we can't have it running again, so make sure that
+                # it goes down for good this time
+                SERVICE_LOGGER.info('Re-killing %s', request.args['job'])
+                self.jobs[request.args['job']].kill()
+
+            elif request.action == 'job-stopped':
+                self.process_stop(request.args['job'])
+
+            # Since we can't do anything now but stop jobs, all other
+            # requests are ignored
+            future.set_result(None)
+
+        SERVICE_LOGGER.info('KILL: ticker')
+        self.restart_ticker.terminate()
+
+        SERVICE_LOGGER.info('BURY: ticker')
+        self.restart_ticker.wait_for_exit()
+
+        SERVICE_LOGGER.info('KILL: status')
+        self.status.terminate()
+
+        SERVICE_LOGGER.info('BURY: status')
+        self.status.wait_for_exit()
+
+        SERVICE_LOGGER.info('KILL: events')
+        self.events.terminate()
+
+        SERVICE_LOGGER.info('BURY: events')
+        self.events.wait_for_exit()
 
     def init_jobs(self):
         """
@@ -138,6 +182,7 @@ class SupervisorService(threading.Thread):
             proc_skel.set_event_sock(self.status.get_peer())
 
             if job_name in self.autostarts:
+                self.running_jobs.add(job_name)
                 SERVICE_LOGGER.info('Autostarting %s', job_name)
                 proc_skel.start()
 
@@ -166,11 +211,15 @@ class SupervisorService(threading.Thread):
     def process_start(self, job):
         SERVICE_LOGGER.info('Process %s started', job)
         self.events.send(job, protocol.EVENT_STARTJOB)
+        self.running_jobs.add(job)
 
     def process_stop(self, job):
         SERVICE_LOGGER.info('Process %s stopped', job)
+        self.running_jobs.remove(job)
 
-        if job in self.restarts and job not in self.blocked_restarts:
+        is_restartable = job in self.restarts
+        not_blocked = job not in self.blocked_restarts
+        if not self.shutting_down and is_restartable and not_blocked:
             now = time.time()
             most_recent_restart = self.restart_times.get(job, 0)
             self.restart_times[job] = now
@@ -203,6 +252,11 @@ class SupervisorService(threading.Thread):
             # If the job is going to be started again, then let the timer
             # handle this request instead of us
             SERVICE_LOGGER.info('Ignoring start of %s, will restart soon', job)
+            return protocol.SuccessResponse(job)
+
+        if self.shutting_down:
+            # No sense in trying if it's just going to die again
+            SERVICE_LOGGER.info('Ignoring start of %s, shutting down', job)
             return protocol.SuccessResponse(job)
 
         try:
@@ -313,7 +367,6 @@ class SupervisorShim:
         SHIM_LOGGER.info('Waiting for termination')
         self._request('terminate')
 
-        self.request_queue = None
         self.service.join()
         SHIM_LOGGER.info('Got successful termination')
 
