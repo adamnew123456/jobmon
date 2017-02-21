@@ -73,7 +73,11 @@ class EventServer(threading.Thread):
 
                     for client in dead_clients:
                         LOGGER.info('Client died during sending - cleaning up')
-                        pollster.unregister(client)
+                        try:
+                            pollster.unregister(client)
+                        except KeyError:
+                            LOGGER.warning('Could not unregister client %s', client)
+
                         clients.remove(client)
 
                     if msg.event_code == protocol.EVENT_TERMINATE:
@@ -81,7 +85,11 @@ class EventServer(threading.Thread):
                 else:
                     LOGGER.info('Client disconnected')
 
-                    pollster.unregister(key.fileobj)
+                    try:
+                        pollster.unregister(key.fileobj)
+                    except KeyError:
+                        LOGGER.warning('Could not unregister client %s', key.fileobj)
+
                     clients.remove(key.fileobj)
 
         LOGGER.info('Closing...')
