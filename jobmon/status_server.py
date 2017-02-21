@@ -35,6 +35,7 @@ class StatusServer(threading.Thread, util.TerminableThreadMixin):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         return protocol.ProtocolDatagramSocket(sock, ('localhost', port), timeout=None)
 
+    @util.log_crashes(LOGGER, 'Error in status server')
     def run(self):
         """
         This manages input from the job threads, and dispatches them to the

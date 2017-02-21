@@ -8,7 +8,7 @@ import selectors
 import socket
 import threading
 
-from jobmon import protocol
+from jobmon import protocol, util
 
 LOGGER = logging.getLogger('jobmon.event_server')
 
@@ -34,6 +34,7 @@ class EventServer(threading.Thread):
         self.bridge_out = protocol.ProtocolFile(os.fdopen(writer, 'wb'),
                                                 timeout=None)
 
+    @util.log_crashes(LOGGER, 'Event server error')
     def run(self):
         """
         Manages connections, and sends out events to waiting clients.

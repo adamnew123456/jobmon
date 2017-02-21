@@ -73,6 +73,7 @@ class Ticker(threading.Thread, util.TerminableThreadMixin):
             self.callback(key)
             self.unregister(key)
 
+    @util.log_crashes(LOGGER, 'Error in ticker')
     def run(self):
         """
         Runs the timeout loop, calling the timeout function when appropriate.

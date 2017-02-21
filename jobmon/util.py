@@ -10,6 +10,25 @@ def reset_loggers():
     for handler in root.handlers[:]:
         root.removeHandler(handler)
 
+class log_crashes:
+    """
+    A decorator which logs all exceptions that escape from the decorated 
+    function.
+    """
+    def __init__(self, logger, message='Error in'):
+        self.logger = logger
+        self.message = message
+
+    def __call__(self, f):
+        def wrapper(*args, **kwargs):
+            try:
+                return f(*args, **kwargs)
+            except Exception as ex:
+                self.logger.exception("%s %s: %s", self.message, f, ex)
+                raise
+
+        return wrapper
+            
 class TerminableThreadMixin:
     """
     TerminableThreadMixin is useful for threads that need to be terminated

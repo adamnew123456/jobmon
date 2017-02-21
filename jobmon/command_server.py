@@ -28,6 +28,7 @@ class CommandServer(threading.Thread, util.TerminableThreadMixin):
 
         self.supervisor = supervisor
 
+    @util.log_crashes(LOGGER, 'Command server error')
     def run(self):
         """
         Manages connections, and calls into the supervisor when commands

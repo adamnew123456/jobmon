@@ -22,7 +22,7 @@ import signal
 import sys
 import threading
 
-from jobmon import protocol
+from jobmon import protocol, util
 
 LOGGER = logging.getLogger('supervisor.child-process')
 
@@ -182,6 +182,7 @@ class ChildProcess:
                 self.working_dir if self.working_dir is not None
                 else os.getcwd())
 
+            @util.log_crashes(LOGGER, 'Error in child ' + self.name)
             def wait_for_subprocess():
                 # Since waitpid() is synchronous (doing it asynchronously takes
                 # a good deal more work), the waiting is done in a worker thread
