@@ -249,6 +249,15 @@ class ChildProcess:
         # sets it and the death handler unsets it.
         return self.child_pid.get() is not None
 
+    def get_pid(self):
+        """
+        Gets the PID of the process.
+
+        :return: Either an ``int`` (representing the child's PID) if the 
+        process is running, or ``None`` if it is not.
+        """
+        return self.child_pid.get()
+
 class ChildProcessSkeleton(ChildProcess):
     def __init__(self, name, program, **config):
         """

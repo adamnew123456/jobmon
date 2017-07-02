@@ -47,7 +47,7 @@ class CommandServerRecorder:
     @wrap_future
     def get_status(self, job):
         self.commands.append(('status', job))
-        return protocol.StatusResponse(job, True)
+        return protocol.StatusResponse(job, True, 1234)
 
     @wrap_future
     def list_jobs(self):
@@ -75,6 +75,7 @@ class TestCommandServer(unittest.TestCase):
                 None,
                 None,
                 True, 
+                1234,
                 {
                     'a': True,
                     'b': False,
@@ -86,6 +87,7 @@ class TestCommandServer(unittest.TestCase):
                 command_pipe.start_job('some_job'),
                 command_pipe.stop_job('some_job'),
                 command_pipe.is_running('some_job'),
+                command_pipe.get_pid('some_job'),
                 command_pipe.get_jobs(),
                 command_pipe.terminate(),
             ]
@@ -97,6 +99,7 @@ class TestCommandServer(unittest.TestCase):
             self.assertEqual(command_recorder.commands,
                             [('start', 'some_job'),
                              ('stop', 'some_job'),
+                             ('status', 'some_job'),
                              ('status', 'some_job'),
                              'list',
                              'terminate'])

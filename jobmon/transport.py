@@ -174,6 +174,32 @@ class CommandPipe:
         finally:
             self.sock.close()
 
+    def get_pid(self, job_name):
+        """
+        Retrieves the PID of the running instance of a particular job.
+
+        :param str job_name: The name of the job to query.
+        :return: An ``int`` containing the PID if the job is running, or 
+        ``None`` otherwise.
+        """
+        self.reconnect()
+        msg = protocol.Command(job_name, protocol.CMD_STATUS)
+        self.sock.send(msg)
+        result = self.sock.recv()
+
+        try:
+            if isinstance(result, protocol.FailureResponse):
+                if result.reason == protocol.ERR_NO_SUCH_JOB:
+                    raise NameError(
+                        'The job "{}" does not exist'.format(job_name))
+                else:
+                    raise JobError('Unknown error: reason "{}"'.format(
+                        protocol.reason_to_str(result.reason)))
+            else:
+                return result.pid
+        finally:
+            self.sock.close()
+
     def get_jobs(self):
         """
         Gets the status of every job known to the supervisor.

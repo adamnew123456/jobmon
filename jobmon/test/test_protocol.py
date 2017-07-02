@@ -73,8 +73,8 @@ class TestProtocol:
                 FailureResponse('some_job', ERR_NO_SUCH_JOB),
                 FailureResponse('some_job', ERR_JOB_STARTED),
                 FailureResponse('some_job', ERR_JOB_STOPPED),
-                StatusResponse('some_job', True),
-                StatusResponse('some_job', False),
+                StatusResponse('some_job', True, 1234),
+                StatusResponse('some_job', False, None),
                 JobListResponse({'a': True, 'b': False}))
 
         proto_read, proto_write = self.make_protocol()
@@ -92,7 +92,7 @@ class TestProtocol:
         Ensure that the transport raises a ProtocolTimeout if timeouts are
         configured.
         """
-        response = StatusResponse('some_job', True)
+        response = StatusResponse('some_job', True, 1234)
 
         proto_read, proto_write = self.make_protocol()
 
@@ -126,7 +126,7 @@ class TestProtocol:
         Ensure that the transport does not raise a ProtocolTimeout if timeouts
         are not configured.
         """
-        response = StatusResponse('some_job', True)
+        response = StatusResponse('some_job', True, 1234)
 
         proto_read, proto_write = self.make_protocol(timeout=False)
 

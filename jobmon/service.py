@@ -292,7 +292,8 @@ class SupervisorService(threading.Thread):
 
     def get_status(self, job):
         SERVICE_LOGGER.info('Request to query job %s', job)
-        return protocol.StatusResponse(job, self.jobs[job].get_status())
+        job_obj = self.jobs[job]
+        return protocol.StatusResponse(job, job_obj.get_status(), job_obj.get_pid())
 
     def list_jobs(self):
         SERVICE_LOGGER.info('Request to list jobs')

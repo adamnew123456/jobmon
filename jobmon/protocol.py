@@ -192,10 +192,10 @@ class FailureResponse(namedtuple('FailureResponse', ['job_name', 'reason'])):
             raise ValueError
         return FailureResponse(dct['job'], dct['reason'])
 
-class StatusResponse(namedtuple('StatusResponse', ['job_name', 'is_running'])):
+class StatusResponse(namedtuple('StatusResponse', ['job_name', 'is_running', 'pid'])):
     def __str__(self):
         if self.is_running:
-            return 'Status[{} is RUNNING]'.format(self.job_name)
+            return 'Status[{} is RUNNING at PID {}]'.format(self.job_name, self.pid)
         else:
             return 'Status[{} is STOPPED]'.format(self.job_name)
 
@@ -209,6 +209,7 @@ class StatusResponse(namedtuple('StatusResponse', ['job_name', 'is_running'])):
             'type': MSG_STATUS,
             'job': self.job_name,
             'is_running': self.is_running,
+            'pid': self.pid
         }
 
     @staticmethod
@@ -221,7 +222,7 @@ class StatusResponse(namedtuple('StatusResponse', ['job_name', 'is_running'])):
         """
         if dct['type'] != MSG_STATUS:
             raise ValueError
-        return StatusResponse(dct['job'], dct['is_running'])
+        return StatusResponse(dct['job'], dct['is_running'], dct['pid'])
 
 class JobListResponse(namedtuple('JobListResponse', ['all_jobs'])):
     def __str__(self):

@@ -18,7 +18,7 @@ from jobmon import config, launcher, protocol, transport
 # what options are available when invoking the CLI
 """
 Usage:
-  jobmon <daemon|start|stop|status|list-jobs|terminate|listen>
+  jobmon <daemon|start|stop|status|pid|list-jobs|terminate|listen>
 
 Commands:
   jobmon daemon <config>
@@ -37,6 +37,11 @@ Commands:
     Queries the status of the given job, and returns a 0 exit status if the
     job is running, a 1 exit status if it is not, and a 2 exit status if no
     such job exists.
+
+  jobmon pid <job>
+    Prints the PID of the job's process if it is running and exits with a 
+    status of 0, exits with a status of 1 (not printing anything) if the job 
+    is not running, or exits with a status of 2 if no such job exists.
 
   jobmon list-jobs prints out a list of jobs in the following format:
 
@@ -96,6 +101,13 @@ queries (this environment variable is required for all other commands).''')
 returned; if the job is stopped, a 1 status is returned, and if the job does 
 not exist or another errors has happened, a 2 is returned.''')
     status_parser.add_argument('JOB',
+        help='The name of the job to query')
+
+    pid_parser = command_arg.add_parser('pid',
+        help='''Prints the PID of a job's process, if it is running. Exits 
+with a 0 status code if the job is running, 1 if the job is not running, and 
+2 if some error occurs.''')
+    pid_parser.add_argument('JOB',
         help='The name of the job to query')
 
     listen_parser = command_arg.add_parser('listen',
@@ -214,6 +226,27 @@ def main():
         except IOError:
             print('Server dropped our connection.',
                   file=sys.stderr)
+            return -1
+        except NameError:
+            print('That job does not exist', file=sys.stderr)
+            return -1
+        except transport.JobError as job_err:
+            print(str(job_err), file=sys.stderr)
+            return -1
+    elif args.command == 'pid':
+        # Retrieves the PID of the job
+        try:
+            command_pipe = transport.CommandPipe(int(control_port))
+            pid = command_pipe.get_pid(args.JOB)
+            if pid is not None:
+                print(pid)
+
+            return 0 if pid else 1
+        except ValueError:
+            print('Invalid control port:', control_port)
+            return -1
+        except IOError:
+            print('Server dropped our connection.', file=sys.stderr)
             return -1
         except NameError:
             print('That job does not exist', file=sys.stderr)
