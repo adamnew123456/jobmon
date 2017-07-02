@@ -78,7 +78,10 @@ class EventServer(threading.Thread):
                         except KeyError:
                             LOGGER.warning('Could not unregister client %s', client)
 
-                        clients.remove(client)
+                        try:
+                            clients.remove(client)
+                        except KeyError:
+                            LOGGER.warning('Could not unregister client %s', client)
 
                     if msg.event_code == protocol.EVENT_TERMINATE:
                         done = True
@@ -90,7 +93,11 @@ class EventServer(threading.Thread):
                     except KeyError:
                         LOGGER.warning('Could not unregister client %s', key.fileobj)
 
-                    clients.remove(key.fileobj)
+                    try:
+                        clients.remove(key.fileobj)
+                    except KeyError:
+                        LOGGER.warning('Could not unregister client %s', key.fileobj)
+                        
 
         LOGGER.info('Closing...')
 
