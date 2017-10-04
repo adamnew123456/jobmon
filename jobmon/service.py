@@ -133,7 +133,7 @@ class SupervisorService(threading.Thread):
         # closure notifications. See the 'terminate' case above for an
         # explanation of why this is necessary.
         SERVICE_LOGGER.info('Entering event closure loop')
-        while self.running_jobs and not self.request_queue.empty():
+        while self.running_jobs:
             SERVICE_LOGGER.info('Still running: %s', self.running_jobs)
             request, future = self.request_queue.get()
 
